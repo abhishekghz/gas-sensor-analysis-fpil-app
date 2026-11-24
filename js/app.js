@@ -286,7 +286,7 @@
       const unk = Object.entries(m.unseen_mixtures_raw_model || {}).map(([f, v]) => `<tr><td>${esc(f)}</td><td class="num">${v.true_rosin_pct}%</td><td class="num">${v.estimated_rosin_pct_mean.toFixed(0)}%</td></tr>`).join("");
       $("#resMetrics").innerHTML = `<div class="tablewrap"><table class="tbl"><tr><th>Task</th><th class="num">Recordings</th><th class="num">Hold-out test (70/30)</th><th class="num">Mean of ${m.repeats} random splits</th><th class="num">Leave-one-file-out</th><th class="num">Majority baseline</th></tr>${rows.join("")}</table></div>
         <h3>Unseen mixtures (not in training)</h3><div class="tablewrap"><table class="tbl"><tr><th>File</th><th class="num">True rosin</th><th class="num">Estimated</th></tr>${unk}</table></div>
-        <p class="muted small">With 3 of 11 configurations recorded and 1–2 sessions each, the forest is close to the majority baseline and does not yet generalise to new sessions.
+        <p class="muted small">Trained on ${(m.trained_configs || []).length} of 11 configurations (${(m.trained_configs || []).map((c) => c + "%").join(", ")} rosin), 1–2 sessions each. Leave-one-file-out accuracy is low, so the model does not yet generalise to new sessions.
         Accuracy should improve as the remaining configurations are recorded with paired air recordings.</p>`;
     } catch (e) { $("#resMetrics").textContent = "Could not load metrics.json"; }
     $("#rawFigs").innerHTML = Object.keys(S.labels).map((fn) => {

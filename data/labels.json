@@ -28,8 +28,8 @@
     },
     "data-rosin(20%)+salak(80%).csv": {
       "rosin_pct": 20,
-      "phases": null,
-      "notes": "11 recordings; data/air layout not yet given."
+      "phases": "DADADADADAD",
+      "notes": "11 recordings, alternating: 1st data, 2nd air, ..."
     },
     "data-rosin(80%)+salak(20%)+1blank-container.csv": {
       "rosin_pct": 80,
