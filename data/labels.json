@@ -1,0 +1,40 @@
+{
+  "_about": "Each CSV is a series of ~1-minute recordings (~600 rows at ~10 Hz) separated by time gaps. 'phases' gives one letter per recording in order: D = sample (data), A = indoor lab air. null = layout not yet confirmed (file is kept out of training). rosin_pct is the rosin share of the rosin/salak mixture (salak = 100 - rosin_pct).",
+  "files": {
+    "data-rosin-air-to3.30-3.45.csv": {
+      "rosin_pct": 100,
+      "phases": "DADADA",
+      "notes": "Rosin vs lab air. Air recordings at ~3:32, 3:38:12, 3:44:36; rosin at start, 3:35, 3:41:26."
+    },
+    "data-salak-air-3.56-4.10(only-1).csv": {
+      "rosin_pct": 0,
+      "phases": "D",
+      "notes": "Only one recording (salak)."
+    },
+    "data-rosin+salak(50%-50%).csv": {
+      "rosin_pct": 50,
+      "phases": "DADADA",
+      "notes": "Alternating data/air; one data+air pair is one cycle."
+    },
+    "data-salak-100%-pure.csv": {
+      "rosin_pct": 0,
+      "phases": "DDDDDAAAAA",
+      "notes": "First 5 recordings salak, rest air."
+    },
+    "data-rosin-100%-pure.csv": {
+      "rosin_pct": 100,
+      "phases": "DDDDDAADDD",
+      "notes": "First 5 rosin, then air, rosin again from 7:17 PM (recording starting 19:16:36)."
+    },
+    "data-rosin(20%)+salak(80%).csv": {
+      "rosin_pct": 20,
+      "phases": null,
+      "notes": "11 recordings; data/air layout not yet given."
+    },
+    "data-rosin(80%)+salak(20%)+1blank-container.csv": {
+      "rosin_pct": 80,
+      "phases": null,
+      "notes": "11 recordings incl. 1 blank container; data/air layout not yet given."
+    }
+  }
+}

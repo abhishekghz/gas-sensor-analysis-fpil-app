@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gas Sensor Analysis</title>
+<meta name="description" content="Rosin / salak mixture analysis from a 4-sensor gas array: compare data vs air, predict the mixture, and add training data.">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <h1>Gas Sensor Analysis</h1>
+      <p class="sub">Rosin / salak mixtures · 4-sensor array · Random Forest</p>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="compare" role="tab">Compare</button>
+      <button class="tab" data-tab="predict" role="tab">Predict &amp; Train</button>
+      <button class="tab" data-tab="results" role="tab">Model results</button>
+      <button class="tab" data-tab="samples" role="tab">Samples</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="boot" class="notice">Loading the built-in dataset and training the model…</div>
+
+  <!-- ============ COMPARE ============ -->
+  <section id="tab-compare" class="panel active">
+    <div class="card">
+      <h2>Compare recordings</h2>
+      <div class="seg-toggle" id="cmpMode">
+        <label><input type="radio" name="cmpMode" value="air" checked> Data vs air (one file)</label>
+        <label><input type="radio" name="cmpMode" value="two"> Two datasets</label>
+      </div>
+      <div class="grid2">
+        <div id="loaderA"></div>
+        <div id="loaderB" class="hidden"></div>
+      </div>
+    </div>
+
+    <div class="card" id="cmpControls">
+      <div class="row wrapgap">
+        <label>Parameter
+          <select id="cmpParam">
+            <option>Sensor1</option><option selected>Sensor2</option><option>Sensor3</option><option>Sensor4</option>
+            <option>Temperature</option><option>Humidity</option>
+          </select>
+        </label>
+        <label class="chk"><input type="checkbox" id="cmpNorm" checked> Subtract each recording's start value (baseline correction)</label>
+      </div>
+      <div id="cmpEmpty" class="muted">Load a file above to see plots.</div>
+      <div id="plotTrace" class="plot"></div>
+      <div class="grid2">
+        <div id="plotMean" class="plot"></div>
+        <div id="plotDiff" class="plot"></div>
+      </div>
+      <h3>Summary for every parameter</h3>
+      <div class="tablewrap"><table id="cmpTable" class="tbl"></table></div>
+    </div>
+  </section>
+
+  <!-- ============ PREDICT & TRAIN ============ -->
+  <section id="tab-predict" class="panel">
+    <div class="card">
+      <h2>Predict the mixture</h2>
+      <p class="muted">Upload a recording file. Mark which 1-minute recordings are <b>data</b> (sample) and which are <b>air</b>.
+        If the file includes air recordings, the prediction uses the <b>air-calibrated</b> model (data − air). Otherwise it uses the raw model.</p>
+      <div id="loaderP"></div>
+      <div class="row wrapgap">
+        <button id="btnPredict" class="btn primary" disabled>Predict configuration</button>
+        <button id="btnSuggest" class="btn" disabled title="Uses a data-vs-air random forest; accuracy is low on current data">Auto-suggest data/air</button>
+      </div>
+      <div id="predOut"></div>
+    </div>
+
+    <div class="card">
+      <h2>Use this file for training</h2>
+      <div class="row wrapgap">
+        <label>Label (configuration)
+          <select id="trainLabel"></select>
+        </label>
+        <button id="btnAdd" class="btn primary" disabled>Add file to training set</button>
+      </div>
+      <p class="muted small">Recordings marked "skip" are not used. The phases you set above are saved together with the label. Added data is stored in this browser.
+        Use <b>Export</b> to keep a copy or to commit it to the repository (<code>docs/data/extra_training.json</code> is loaded automatically for every visitor).</p>
+    </div>
+
+    <div class="card">
+      <h2>Training set &amp; model</h2>
+      <div class="row wrapgap">
+        <label class="chk"><input type="checkbox" id="useBuiltin" checked> Include built-in dataset</label>
+        <button id="btnRetrain" class="btn primary">Retrain &amp; evaluate (70/30 split)</button>
+        <button id="btnExport" class="btn">Export training set</button>
+        <label class="btn filebtn">Import training set<input type="file" id="importFile" accept=".json" hidden></label>
+        <button id="btnReset" class="btn danger">Remove added data</button>
+      </div>
+      <div class="tablewrap"><table id="trainTable" class="tbl"></table></div>
+      <div id="evalOut"></div>
+    </div>
+  </section>
+
+  <!-- ============ RESULTS ============ -->
+  <section id="tab-results" class="panel">
+    <div class="card">
+      <h2>Model results (offline analysis)</h2>
+      <p class="muted">From <code>analysis/train.py</code>. The same Random Forest runs in this page.</p>
+      <div id="resMetrics"></div>
+    </div>
+    <div class="card figs">
+      <figure><img src="results/model_comparison.png" alt="Accuracy compared with baseline"><figcaption>Accuracy: random 70/30 splits (mean ± sd), fixed hold-out, and majority baseline</figcaption></figure>
+      <div class="grid2">
+        <figure><img src="results/confusion_air_calibrated.png" alt="Confusion matrix"><figcaption>Hold-out confusion matrix (air-calibrated)</figcaption></figure>
+        <figure><img src="results/feature_importance.png" alt="Feature importance"><figcaption>Most informative features</figcaption></figure>
+      </div>
+      <figure><img src="results/pca.png" alt="PCA"><figcaption>PCA: data vs air, and mixtures with and without air calibration</figcaption></figure>
+      <h3>Raw traces (red = data, blue = air, grey = layout pending)</h3>
+      <div id="rawFigs"></div>
+    </div>
+  </section>
+
+  <!-- ============ SAMPLES ============ -->
+  <section id="tab-samples" class="panel">
+    <div class="card">
+      <h2>Sample photos</h2>
+      <div id="gallery" class="gallery"></div>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap muted small">
+  Everything runs in your browser. Uploaded files are not sent anywhere.
+</footer>
+
+<script src="js/core.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
