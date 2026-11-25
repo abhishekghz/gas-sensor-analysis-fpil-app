@@ -51,13 +51,31 @@
         </label>
         <label class="chk"><input type="checkbox" id="cmpNorm" checked> Subtract each recording's start value (baseline correction)</label>
       </div>
-      <div id="cmpEmpty" class="muted">Load a file above to see plots.</div>
+      <div id="cmpEmpty" class="muted">Load a file above to see the difference.</div>
+    </div>
+
+    <div class="card">
+      <h2>What is the difference? (in plain numbers)</h2>
+      <p class="muted small" id="diffNames"></p>
+      <div id="diffPlain"></div>
+      <div id="plotRatio" class="plot"></div>
+      <details class="howto"><summary>How to read these numbers</summary><ul>
+        <li><b>Reading</b>: the raw number a sensor gives out. It has no unit; what matters is how much it changes.</li>
+        <li><b>Average reading</b>: the mean of one 1-minute recording.</li>
+        <li><b>Change during the minute</b>: the reading at the end of a recording minus the reading at its start.</li>
+        <li><b>Normal variation</b>: how much repeat recordings of the same thing differ from each other. A difference smaller than this could just be chance.</li>
+        <li><b>2×</b> means the difference is twice the normal variation. Up to 1× = no real difference, 1–2× = small, 2–4× = clear, more than 4× = very clear.</li>
+      </ul></details>
+    </div>
+
+    <div class="card">
+      <h2>Curves</h2>
       <div id="plotTrace" class="plot"></div>
       <div class="grid2">
         <div id="plotMean" class="plot"></div>
         <div id="plotDiff" class="plot"></div>
       </div>
-      <h3>Summary for every parameter</h3>
+      <h3>Detailed numbers for every parameter</h3>
       <div class="tablewrap"><table id="cmpTable" class="tbl"></table></div>
     </div>
   </section>
@@ -67,7 +85,8 @@
     <div class="card">
       <h2>Predict the mixture</h2>
       <p class="muted">Upload a recording file. Mark which 1-minute recordings are <b>data</b> (sample) and which are <b>air</b>.
-        If the file includes air recordings, the prediction uses the <b>air-calibrated</b> model (data − air). Otherwise it uses the raw model.</p>
+        The model compares them with the mixtures it has learned. If the file also has air recordings, an air-corrected model gives a second opinion.</p>
+      <div id="trustBox"></div>
       <div id="loaderP"></div>
       <div class="row wrapgap">
         <button id="btnPredict" class="btn primary" disabled>Predict configuration</button>
@@ -112,9 +131,10 @@
     <div class="card figs">
       <figure><img src="results/model_comparison.png" alt="Accuracy compared with baseline"><figcaption>Accuracy: random 70/30 splits (mean ± sd), fixed hold-out, and majority baseline</figcaption></figure>
       <div class="grid2">
-        <figure><img src="results/confusion_air_calibrated.png" alt="Confusion matrix"><figcaption>Hold-out confusion matrix (air-calibrated)</figcaption></figure>
+        <figure><img src="results/confusion_air_calibrated.png" alt="Confusion matrix"><figcaption>Test-set confusion matrix (air-corrected model, day 1)</figcaption></figure>
         <figure><img src="results/feature_importance.png" alt="Feature importance"><figcaption>Most informative features</figcaption></figure>
       </div>
+      <figure><img src="results/true_vs_estimated.png" alt="True vs estimated rosin" style="max-width:560px"><figcaption>True vs estimated rosin % for each mixture (5-fold cross-validation). Points on the dashed line would be perfect.</figcaption></figure>
       <figure><img src="results/pca.png" alt="PCA"><figcaption>PCA: data vs air, and mixtures with and without air calibration</figcaption></figure>
       <h3>Raw traces (red = data, blue = air, grey = layout pending)</h3>
       <div id="rawFigs"></div>

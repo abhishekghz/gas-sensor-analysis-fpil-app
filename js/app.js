@@ -164,42 +164,144 @@
     const D = f.segs.map((s, i) => ({ s, i })).filter((o) => f.phases[o.i] === "D");
     const A = f.segs.map((s, i) => ({ s, i })).filter((o) => f.phases[o.i] === "A");
     if (!D.length) return { error: "Mark at least one recording as data." };
-    let model, X, mode;
+    if (!S.models.raw) return { error: "No trained model — add training data first." };
+    const run = (model, X) => {
+      const P = model.predictProba(X);
+      const avg = model.classes.map((_, c) => C.mean(P.map((p) => p[c])));
+      const best = avg.indexOf(Math.max(...avg));
+      return { classes: model.classes, avg, best: model.classes[best], conf: avg[best], est: avg.reduce((s, p, c) => s + p * model.classes[c], 0),
+        per: D.map((o, k) => ({ rec: o.i + 1, start: o.s.start, cls: model.classes[P[k].indexOf(Math.max(...P[k]))], conf: Math.max(...P[k]), est: P[k].reduce((s, p, c) => s + p * model.classes[c], 0) })) };
+    };
+    const main = run(S.models.raw, D.map((o) => C.FEATS.map((k) => o.s.f[k])));
+    let second = null;
     if (A.length && S.models.cal) {
       const ref = {}; C.FEATS.forEach((k) => (ref[k] = C.mean(A.map((o) => o.s.f[k]))));
-      X = D.map((o) => C.FEATS.map((k) => o.s.f[k] - ref[k])); model = S.models.cal; mode = "air-calibrated (data − air)";
-    } else if (S.models.raw) {
-      X = D.map((o) => C.FEATS.map((k) => o.s.f[k])); model = S.models.raw; mode = A.length ? "raw (air-calibrated model unavailable)" : "raw (no air recordings in file)";
-    } else return { error: "No trained model — add training data first." };
-    const P = model.predictProba(X);
-    const avg = model.classes.map((_, c) => C.mean(P.map((p) => p[c])));
-    const best = avg.indexOf(Math.max(...avg));
-    return { mode, classes: model.classes, avg, best: model.classes[best], conf: avg[best], est: avg.reduce((s, p, c) => s + p * model.classes[c], 0),
-      per: D.map((o, k) => ({ rec: o.i + 1, start: o.s.start, cls: model.classes[P[k].indexOf(Math.max(...P[k]))], conf: Math.max(...P[k]), est: P[k].reduce((s, p, c) => s + p * model.classes[c], 0) })), nAir: A.length };
+      second = run(S.models.cal, D.map((o) => C.FEATS.map((k) => o.s.f[k] - ref[k])));
+    }
+    return Object.assign(main, { second, nAir: A.length });
   }
 
   function renderPrediction(f) {
     const r = predict(f), out = $("#predOut");
     if (r.error) { out.innerHTML = `<div class="notice warn">${esc(r.error)}</div>`; return; }
     const trained = r.classes.map((c) => c + "%").join(", ");
-    const truth = f.rosin_pct != null ? `<p class="kv">File name / label suggests: <b>${cfgName(f.rosin_pct)}</b> ${f.rosin_pct === r.best ? '<span class="badge good">match</span>' : '<span class="badge bad">different</span>'}</p>` : "";
+    const truth = f.rosin_pct != null ? `<p class="kv">File name / label says: <b>${cfgName(f.rosin_pct)}</b> ${f.rosin_pct === r.best ? '<span class="badge good">match</span>' : '<span class="badge bad">different</span>'}</p>` : "";
+    const second = r.second ? `<p class="kv small">Second opinion, air-corrected model (knows only ${r.second.classes.map((c) => c + "%").join(", ")}): <b>${cfgName(r.second.best)}</b> (${pct(r.second.conf)})</p>` : "";
     out.innerHTML = `<div class="result"><div>
-        <div class="muted small">Predicted configuration</div>
+        <div class="muted small">Best guess</div>
         <div class="big">${cfgName(r.best)}</div>
-        <p class="kv">Confidence <b>${pct(r.conf)}</b> · estimated rosin ≈ <b>${r.est.toFixed(0)}%</b></p>
-        <p class="kv">Model: <span class="badge">${esc(r.mode)}</span></p>
-        <p class="kv small muted">${r.per.length} data and ${r.nAir} air recordings used. The model knows these configurations: ${trained}.</p>
+        <p class="kv">Model's confidence <b>${pct(r.conf)}</b> · estimated rosin ≈ <b>${r.est.toFixed(0)}%</b></p>
+        <p class="kv small muted">Based on ${r.per.length} sample recordings. The model knows these mixtures: ${trained} rosin.</p>
+        ${second}
         ${truth}
         ${trainingRecs().some((t) => t.file === f.name) ? '<p class="kv small"><span class="badge warn">note</span> This file is already in the training set, so this is not an independent test.</p>' : ""}
+        <p class="kv small"><span class="badge warn">experimental</span> Read the reliability note above before trusting this result.</p>
       </div><div id="plotProb" class="plot"></div></div>
-      <h3>Per recording</h3><div class="tablewrap"><table class="tbl"><tr><th>#</th><th>Start</th><th>Predicted</th><th class="num">Confidence</th><th class="num">Est. rosin %</th></tr>
+      <h3>Per recording</h3><div class="tablewrap"><table class="tbl"><tr><th>#</th><th>Start</th><th>Best guess</th><th class="num">Confidence</th><th class="num">Est. rosin %</th></tr>
       ${r.per.map((p) => `<tr><td>${p.rec}</td><td>${p.start}</td><td>${cfgName(p.cls)}</td><td class="num">${pct(p.conf)}</td><td class="num">${p.est.toFixed(0)}</td></tr>`).join("")}</table></div>`;
     const y = C.CONFIGS.map((c) => { const i = r.classes.indexOf(c); return i < 0 ? 0 : r.avg[i]; });
     Plotly.newPlot("plotProb", [{ type: "bar", x: C.CONFIGS.map((c) => `R${c}/S${100 - c}`), y,
       marker: { color: C.CONFIGS.map((c) => (c === r.best ? css("--accent") : r.classes.includes(c) ? css("--air") : css("--line"))) },
       hovertemplate: "%{x}: %{y:.0%}<extra></extra>" }],
-    plotLayout({ title: { text: "Probability per configuration (grey = not trained yet)", font: { size: 13 } }, yaxis: { tickformat: ".0%", range: [0, 1], gridcolor: css("--line") }, showlegend: false }), PCFG);
+    plotLayout({ title: { text: "How likely is each mixture? (grey = not trained yet)", font: { size: 13 } }, yaxis: { tickformat: ".0%", range: [0, 1], gridcolor: css("--line") }, showlegend: false }), PCFG);
     $("#trainLabel").value = String(f.rosin_pct != null ? f.rosin_pct : r.best);
+  }
+
+  function renderTrust() {
+    const m = S.metrics, box = $("#trustBox");
+    if (!m || !m.per_config_cv) { box.innerHTML = ""; return; }
+    const missing = C.CONFIGS.filter((c) => !(m.trained_configs || []).includes(c));
+    const cross = (m.cross_day || []).map((c) => `trained on ${esc(c.train_days.join(", "))}, tested on ${esc(c.test_day)}: <b>${pct(c.acc)}</b> right (pure guessing: ${pct(c.chance_acc)})`).join("; ");
+    box.innerHTML = `<div class="notice warn trust"><b>How reliable is the prediction? Work in progress.</b>
+      <ul>
+        <li>On days the model has already seen, it picks exactly the right mixture <b>${pct(m.cv5_acc)}</b> of the time. On average it is off by <b>${m.cv5_mae_pct.toFixed(0)}</b> rosin-% points.</li>
+        <li>On a <b>new day</b> it does not work yet: ${cross}.</li>
+        <li>It knows ${(m.trained_configs || []).map((c) => c + "%").join(", ")} rosin. Not yet: ${missing.map((c) => c + "%").join(", ") || "none"}.</li>
+        <li>To improve it: record lab air in every session, record the missing mixtures, and repeat on more days.</li>
+      </ul></div>`;
+  }
+
+  // ---------------------------------------------------------------- plain-language difference
+  const NICE = { Sensor1: "Sensor 1", Sensor2: "Sensor 2", Sensor3: "Sensor 3", Sensor4: "Sensor 4", Temperature: "Temperature", Humidity: "Humidity" };
+  const UNIT = { Temperature: " °C", Humidity: " % humidity" };
+  const fmtV = (p, v) => (p === "Temperature" || p === "Humidity" ? v.toFixed(1) : Math.round(v).toLocaleString("en-US")) + (UNIT[p] || "");
+  function perRec(segs, p, kind) { return segs.map((s) => { const y = s.data[p]; return kind === "level" ? C.mean(y) : C.mean(y, y.length - 30) - C.mean(y, 0, 3); }); }
+  function sdev(a) { if (a.length < 2) return null; const m = C.mean(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1)); }
+  function compareVals(a, b) {
+    const m1 = C.mean(a), m2 = C.mean(b), diff = m1 - m2, s1 = sdev(a), s2 = sdev(b);
+    let noise = s1 != null && s2 != null ? Math.sqrt(((a.length - 1) * s1 * s1 + (b.length - 1) * s2 * s2) / (a.length + b.length - 2)) : (s1 != null ? s1 : s2);
+    const ratio = noise != null && noise > 1e-9 ? Math.abs(diff) / noise : null;
+    return { m1, m2, diff, pct: Math.abs(m2) > 1e-9 ? (diff / Math.abs(m2)) * 100 : null, noise, ratio };
+  }
+  const VERDICT = [
+    { max: 1, label: "No real difference", cls: "", text: "It is smaller than the normal variation between repeat recordings, so it could be chance." },
+    { max: 2, label: "Small difference", cls: "warn", text: "It is a bit bigger than the normal variation between repeat recordings." },
+    { max: 4, label: "Clear difference", cls: "good", text: "It is well above the normal variation between repeat recordings." },
+    { max: Infinity, label: "Very clear difference", cls: "good", text: "It is far above the normal variation between repeat recordings." },
+  ];
+  const verdictOf = (r) => (r == null ? null : VERDICT.find((v) => r < v.max));
+  const times = (r) => (r == null ? "—" : r < 10 ? r.toFixed(1) + "×" : Math.round(r) + "×");
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  function levelSentence(p, v, n1, n2) {
+    if (v.pct == null) return "";
+    const dir = v.diff >= 0 ? "higher" : "lower";
+    if (p === "Temperature") return `${cap(esc(n1))} was ${Math.abs(v.diff).toFixed(1)} °C ${v.diff >= 0 ? "warmer" : "cooler"} than ${esc(n2)} (${fmtV(p, v.m1)} vs ${fmtV(p, v.m2)}).`;
+    if (p === "Humidity") return `${cap(esc(n1))} had ${Math.abs(v.diff).toFixed(1)} points ${dir} humidity than ${esc(n2)} (${fmtV(p, v.m1)} vs ${fmtV(p, v.m2)}).`;
+    return `With ${esc(n1)} the reading is <b>${Math.abs(v.pct).toFixed(1)}% ${dir}</b> than with ${esc(n2)} (${fmtV(p, v.m1)} vs ${fmtV(p, v.m2)}).`;
+  }
+  function respSentence(p, v, n1, n2) {
+    const w = (x) => (x >= 0 ? "rises" : "drops");
+    if (p === "Temperature" || p === "Humidity") return `During the minute it ${w(v.m1)} by ${Math.abs(v.m1).toFixed(1)} (${esc(n1)}) vs ${Math.abs(v.m2).toFixed(1)} (${esc(n2)}).`;
+    return `During the minute the reading ${w(v.m1)} by ${Math.round(Math.abs(v.m1)).toLocaleString("en-US")} with ${esc(n1)} and ${w(v.m2)} by ${Math.round(Math.abs(v.m2)).toLocaleString("en-US")} with ${esc(n2)}.`;
+  }
+
+  function renderPlainDiff(g1, g2, n1, n2) {
+    const box = $("#diffPlain");
+    if (!g1.length || !g2.length) { box.innerHTML = `<div class="notice">Mark at least one recording in each group (${esc(n1)} and ${esc(n2)}) to see the difference in numbers.</div>`; Plotly.purge($("#plotRatio")); return; }
+    const rows = PARAMS.map((p) => ({ p, lv: compareVals(perRec(g1, p, "level"), perRec(g2, p, "level")), rs: compareVals(perRec(g1, p, "resp"), perRec(g2, p, "resp")) }));
+    const canJudge = rows.some((r) => r.lv.ratio != null);
+    let best = null;
+    rows.filter((r) => r.p.startsWith("Sensor")).forEach((r) => [["lv", r.lv], ["rs", r.rs]].forEach(([k, v]) => {
+      const score = canJudge ? (v.ratio == null ? -1 : v.ratio) : Math.abs(v.pct || 0);
+      if (!best || score > best.score) best = { r, k, v, score };
+    }));
+    const vd = verdictOf(best.v.ratio);
+    const head = best.k === "lv" ? `${NICE[best.r.p]}: ${levelSentence(best.r.p, best.v, n1, n2)}` : `${NICE[best.r.p]}: ${respSentence(best.r.p, best.v, n1, n2)}`;
+    const T = rows.find((r) => r.p === "Temperature").lv, H = rows.find((r) => r.p === "Humidity").lv;
+    const roomDiff = Math.abs(T.diff) >= 1 || Math.abs(H.diff) >= 3;
+    const room = roomDiff
+      ? `<p class="kv"><span class="badge warn">room</span> The room was not the same: ${levelSentence("Temperature", T, n1, n2)} ${levelSentence("Humidity", H, n1, n2)}
+         Temperature and humidity also change the sensor readings, so part of the difference may come from the room, not the sample.</p>`
+      : `<p class="kv"><span class="badge good">room</span> Temperature and humidity were similar in both (within 1 °C and 3 humidity points), so the room is unlikely to explain the difference.</p>`;
+    box.innerHTML = `<div class="headline">
+        <div class="muted small">In one sentence: the biggest difference between ${esc(n1)} and ${esc(n2)}</div>
+        <div class="hl">${head}</div>
+        ${vd ? `<p class="kv">That difference is <b>${times(best.v.ratio)}</b> the normal variation → <span class="badge ${vd.cls}">${vd.label}</span> ${vd.text}</p>`
+             : `<p class="kv"><span class="badge warn">can't judge</span> Each group needs at least 2 recordings to know the normal variation.</p>`}
+        ${room}
+      </div>
+      <div class="cards">${rows.map((r) => {
+        const v1 = verdictOf(r.lv.ratio), v2 = verdictOf(r.rs.ratio);
+        const top = [v1, v2].filter(Boolean).sort((a, b) => VERDICT.indexOf(b) - VERDICT.indexOf(a))[0];
+        return `<div class="pcard"><div class="pc-head"><b>${NICE[r.p]}</b>${top ? `<span class="badge ${top.cls}">${top.label}</span>` : ""}</div>
+          <p><span class="muted small">Average reading</span><br>${levelSentence(r.p, r.lv, n1, n2)} <span class="muted small">(${times(r.lv.ratio)} normal variation)</span></p>
+          <p><span class="muted small">Change during the minute</span><br>${respSentence(r.p, r.rs, n1, n2)} <span class="muted small">(${times(r.rs.ratio)} normal variation)</span></p></div>`;
+      }).join("")}</div>`;
+    if (canJudge) {
+      const names = rows.map((r) => NICE[r.p]).reverse();
+      const zone = (x0, x1, color) => ({ type: "rect", xref: "x", yref: "paper", x0, x1, y0: 0, y1: 1, fillcolor: color, opacity: 0.12, line: { width: 0 }, layer: "below" });
+      const xmax = Math.max(5, ...rows.flatMap((r) => [r.lv.ratio || 0, r.rs.ratio || 0])) * 1.1;
+      Plotly.newPlot("plotRatio", [
+        { type: "bar", orientation: "h", y: names, x: rows.map((r) => r.lv.ratio).reverse(), name: "Average reading", marker: { color: css("--accent") }, hovertemplate: "%{y}: %{x:.1f}× normal variation<extra>Average reading</extra>" },
+        { type: "bar", orientation: "h", y: names, x: rows.map((r) => r.rs.ratio).reverse(), name: "Change during the minute", marker: { color: css("--air") }, hovertemplate: "%{y}: %{x:.1f}× normal variation<extra>Change during the minute</extra>" },
+      ], plotLayout({
+        title: { text: "How big is each difference? (1× = normal variation between repeat recordings)", font: { size: 13 } }, barmode: "group",
+        xaxis: { title: "difference ÷ normal variation", range: [0, xmax], gridcolor: css("--line") },
+        shapes: [zone(0, 1, "#888888"), zone(1, 2, "#e3a04f"), zone(2, 4, "#6fcf73"), zone(4, xmax, "#2e7d32")],
+        annotations: [[0.5, "no real<br>difference"], [1.5, "small"], [3, "clear"], [Math.min(xmax * 0.9, 6), "very clear"]].map(([x, t]) => ({ x, y: 1.02, yref: "paper", text: t, showarrow: false, font: { size: 10, color: css("--muted") }, yanchor: "bottom" })),
+        margin: { l: 90, r: 12, t: 70, b: 80 },
+      }), PCFG);
+    } else Plotly.purge($("#plotRatio"));
   }
 
   // ---------------------------------------------------------------- compare
@@ -229,12 +331,15 @@
     const has = fa && (mode === "air" || fb);
     $("#cmpEmpty").classList.toggle("hidden", !!has);
     ["#plotTrace", "#plotMean", "#plotDiff"].forEach((id) => { if (!has) Plotly.purge($(id)); });
-    if (!has) { $("#cmpTable").innerHTML = ""; return; }
+    if (!has) { $("#cmpTable").innerHTML = ""; $("#diffPlain").innerHTML = ""; Plotly.purge($("#plotRatio")); return; }
     const pick = (f, ph) => f.segs.filter((_, i) => f.phases[i] === ph);
     let g1, g2, n1, n2;
     if (mode === "air") { g1 = pick(fa, "D"); g2 = pick(fa, "A"); n1 = "Data"; n2 = "Air"; }
     else { g1 = pick(fa, "D"); g2 = pick(fb, "D"); n1 = "A: " + fa.name; n2 = "B: " + fb.name; }
     const c1 = css("--data"), c2 = mode === "air" ? css("--air") : css("--b");
+    renderPlainDiff(g1, g2, mode === "air" ? "the sample" : "file A", mode === "air" ? "air" : "file B");
+    $("#diffNames").innerHTML = mode === "air" ? `Comparing the <b>sample</b> recordings (${g1.length}) with the <b>air</b> recordings (${g2.length}) in ${esc(fa.name)}.`
+      : `Comparing the sample recordings of <b>file A</b> = ${esc(fa.name)} (${g1.length}) with <b>file B</b> = ${esc(fb.name)} (${g2.length}).`;
 
     // full trace
     const traces = [];
@@ -276,19 +381,30 @@
 
   // ---------------------------------------------------------------- results + samples
   async function renderResults() {
-    try {
-      const m = await (await fetch("results/metrics.json")).json();
-      const rows = [["mixture_air_calibrated", "Mixture — air-calibrated"], ["mixture_raw", "Mixture — raw"], ["data_vs_air", "Data vs air"]].map(([k, t]) => {
-        const r = m[k], v = r.models["Random forest"];
-        return `<tr><td>${t}</td><td class="num">${r.n}</td><td class="num">${pct(v.holdout_acc)} <span class="muted">(n=${v.holdout_n_test})</span></td><td class="num">${pct(v.repeated_mean)} ± ${pct(v.repeated_std)}</td>
-          <td class="num">${v.lofo_acc == null ? "—" : pct(v.lofo_acc)}</td><td class="num">${pct(r.majority_baseline)}</td></tr>`;
-      });
-      const unk = Object.entries(m.unseen_mixtures_raw_model || {}).map(([f, v]) => `<tr><td>${esc(f)}</td><td class="num">${v.true_rosin_pct}%</td><td class="num">${v.estimated_rosin_pct_mean.toFixed(0)}%</td></tr>`).join("");
-      $("#resMetrics").innerHTML = `<div class="tablewrap"><table class="tbl"><tr><th>Task</th><th class="num">Recordings</th><th class="num">Hold-out test (70/30)</th><th class="num">Mean of ${m.repeats} random splits</th><th class="num">Leave-one-file-out</th><th class="num">Majority baseline</th></tr>${rows.join("")}</table></div>
-        <h3>Unseen mixtures (not in training)</h3><div class="tablewrap"><table class="tbl"><tr><th>File</th><th class="num">True rosin</th><th class="num">Estimated</th></tr>${unk}</table></div>
-        <p class="muted small">Trained on ${(m.trained_configs || []).length} of 11 configurations (${(m.trained_configs || []).map((c) => c + "%").join(", ")} rosin), 1–2 sessions each. Leave-one-file-out accuracy is low, so the model does not yet generalise to new sessions.
-        Accuracy should improve as the remaining configurations are recorded with paired air recordings.</p>`;
-    } catch (e) { $("#resMetrics").textContent = "Could not load metrics.json"; }
+    const m = S.metrics;
+    if (!m) { $("#resMetrics").textContent = "Could not load metrics.json"; return; }
+    const rows = [["mixture_raw", "Mixture (main model)"], ["mixture_air_calibrated", "Mixture, air-corrected (day 1 only)"], ["data_vs_air", "Sample vs air"]].map(([k, t]) => {
+      const r = m[k], v = r.models["Random forest"];
+      return `<tr><td>${t}</td><td class="num">${r.n}</td><td class="num">${pct(v.holdout_acc)} <span class="muted">(n=${v.holdout_n_test})</span></td><td class="num">${pct(v.repeated_mean)} ± ${pct(v.repeated_std)}</td>
+        <td class="num">${v.lofo_acc == null ? "—" : pct(v.lofo_acc)}</td><td class="num">${pct(r.majority_baseline)}</td></tr>`;
+    });
+    const per = (m.per_config_cv || []).map((r) => `<tr><td>${cfgName(r.rosin_pct)}</td><td class="num">${r.n}</td><td class="num">${pct(r.exact_correct)}</td><td class="num">${r.mean_estimate.toFixed(0)}% ± ${r.sd_estimate.toFixed(0)}</td></tr>`).join("");
+    const cross = (m.cross_day || []).map((c) => `<tr><td>${esc(c.train_days.join(", "))}</td><td>${esc(c.test_day)}</td><td class="num">${c.n_test}</td><td class="num">${pct(c.acc)}</td><td class="num">${pct(c.chance_acc)}</td><td class="num">${c.mean_abs_error_pct.toFixed(0)}</td></tr>`).join("");
+    const unk = Object.entries(m.unseen_mixtures_raw_model || {}).map(([f, v]) => `<tr><td>${esc(f)}</td><td class="num">${v.true_rosin_pct}%</td><td class="num">${v.estimated_rosin_pct_mean.toFixed(0)}%</td></tr>`).join("");
+    const missing = C.CONFIGS.filter((c) => !(m.trained_configs || []).includes(c));
+    $("#resMetrics").innerHTML = `<div class="grid2 status">
+        <div class="notice"><b>Works now</b><ul><li>Splitting each file into 1-minute recordings</li><li>Comparing sample vs air, or two files, in plain numbers</li>
+          <li>Guessing the mixture for recordings from days it has seen (${pct(m.cv5_acc)} exactly right, 7 mixtures)</li><li>Adding new labelled files and retraining in the browser</li></ul></div>
+        <div class="notice warn"><b>Not yet</b><ul><li>Guessing the mixture on a new day (${(m.cross_day || []).map((c) => pct(c.acc)).join(" / ")} right)</li>
+          <li>Telling sample from air reliably</li><li>Mixtures ${missing.map((c) => c + "%").join(", ")} rosin (no labelled data)</li><li>Air recordings on day 2, needed to correct the day-to-day shift</li></ul></div></div>
+      <h3>Accuracy (Random Forest, 70 % train / 30 % test)</h3>
+      <div class="tablewrap"><table class="tbl"><tr><th>Task</th><th class="num">Recordings</th><th class="num">Test set (70/30)</th><th class="num">Mean of ${m.repeats} random splits</th><th class="num">New file (leave-one-out)</th><th class="num">Guessing baseline</th></tr>${rows.join("")}</table></div>
+      <h3>Per mixture (5-fold cross-validation)</h3>
+      <div class="tablewrap"><table class="tbl"><tr><th>True mixture</th><th class="num">Recordings</th><th class="num">Exactly right</th><th class="num">Average estimate</th></tr>${per}</table></div>
+      <h3>New day test (train on one day, test on the other)</h3>
+      <div class="tablewrap"><table class="tbl"><tr><th>Train day</th><th>Test day</th><th class="num">Test recordings</th><th class="num">Exactly right</th><th class="num">Pure guessing</th><th class="num">Average error (% points)</th></tr>${cross}</table></div>
+      <p class="muted small">The sensors read clearly lower on 25/11 than on 23/11, and day 2 has no air recordings to correct for it, so the model learns the day rather than the mixture.</p>
+      ${unk ? `<h3>Recorded but not labelled yet</h3><div class="tablewrap"><table class="tbl"><tr><th>File</th><th class="num">True rosin</th><th class="num">Estimated</th></tr>${unk}</table></div>` : ""}`;
     $("#rawFigs").innerHTML = Object.keys(S.labels).map((fn) => {
       const img = "results/raw_" + fn.replace(".csv", "").replaceAll("%", "pct").replaceAll("(", "_").replaceAll(")", "").replaceAll("+", "_") + ".png";
       return `<figure><img loading="lazy" src="${encodeURI(img)}" alt="${esc(fn)}"><figcaption>${esc(fn)}</figcaption></figure>`;
@@ -319,6 +435,7 @@
     }));
     try { const x = await fetch("data/extra_training.json"); if (x.ok) S.repoRecs = (await x.json()).recs || []; } catch (e) { /* optional */ }
     S.userRecs = loadUser();
+    try { S.metrics = await (await fetch("results/metrics.json")).json(); } catch (e) { S.metrics = null; }
 
     $("#trainLabel").innerHTML = C.CONFIGS.map((p) => `<option value="${p}">${cfgName(p)}</option>`).join("");
     S.loadA = createLoader($("#loaderA"), "Dataset A", renderCompare);
@@ -375,6 +492,7 @@
 
     trainModels();
     evaluate();
+    renderTrust();
     renderCompare();
     renderResults();
     renderGallery();

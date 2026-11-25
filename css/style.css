@@ -89,3 +89,15 @@ code { background: var(--chip); padding: 1px 5px; border-radius: 4px; font-size:
 footer { padding-bottom: 24px; }
 .pick { max-width: 100%; }
 .grid2 > *, .result > * { min-width: 0; }
+
+.headline { background: var(--chip); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+.headline .hl { font-size: 19px; font-weight: 600; margin: 4px 0 6px; line-height: 1.35; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 8px; }
+.pcard { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.pcard p { margin: 6px 0; }
+.pc-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.howto { margin-top: 8px; font-size: 14px; }
+.howto summary { cursor: pointer; font-weight: 600; }
+.trust ul, .status ul { margin: 6px 0 0; padding-left: 20px; }
+.trust li, .status li { margin: 3px 0; }
+#plotRatio { min-height: 360px; }
