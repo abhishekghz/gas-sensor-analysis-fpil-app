@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gas Sensor Analysis</title>
-<meta name="description" content="Rosin / salak mixture analysis from a 4-sensor gas array: compare data vs air, predict the mixture, and add training data.">
+<meta name="description" content="Upload a raw gas-sensor recording and see the most likely rosin / salak mixture, plus how sensor readings change from salak to rosin.">
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
 </head>
@@ -13,147 +13,89 @@
   <div class="wrap">
     <div class="brand">
       <h1>Gas Sensor Analysis</h1>
-      <p class="sub">Rosin / salak mixtures · 4-sensor array · Random Forest</p>
+      <p class="sub">Rosin / salak mixtures · 4 gas sensors</p>
     </div>
     <nav class="tabs" role="tablist">
-      <button class="tab active" data-tab="compare" role="tab">Compare</button>
-      <button class="tab" data-tab="predict" role="tab">Predict &amp; Train</button>
-      <button class="tab" data-tab="results" role="tab">Model results</button>
-      <button class="tab" data-tab="samples" role="tab">Samples</button>
+      <button class="tab active" data-tab="predict" role="tab">Predict</button>
+      <button class="tab" data-tab="visual" role="tab">Visualize</button>
     </nav>
   </div>
 </header>
 
 <main class="wrap">
-  <div id="boot" class="notice">Loading the built-in dataset and training the model…</div>
+  <div id="boot" class="notice">Loading the known recordings and preparing the model…</div>
 
-  <!-- ============ COMPARE ============ -->
-  <section id="tab-compare" class="panel active">
+  <!-- ============ PREDICT ============ -->
+  <section id="tab-predict" class="panel active">
     <div class="card">
-      <h2>Compare recordings</h2>
-      <div class="seg-toggle" id="cmpMode">
-        <label><input type="radio" name="cmpMode" value="air" checked> Data vs air (one file)</label>
-        <label><input type="radio" name="cmpMode" value="two"> Two datasets</label>
-      </div>
-      <div class="grid2">
-        <div id="loaderA"></div>
-        <div id="loaderB" class="hidden"></div>
-      </div>
-    </div>
-
-    <div class="card" id="cmpControls">
+      <h2>Upload an unknown recording</h2>
+      <label class="drop" id="drop">Drop the raw CSV here, or click to choose a file<input type="file" id="fileIn" accept=".csv,text/csv" hidden></label>
       <div class="row wrapgap">
-        <label>Parameter
-          <select id="cmpParam">
-            <option>Sensor1</option><option selected>Sensor2</option><option>Sensor3</option><option>Sensor4</option>
-            <option>Temperature</option><option>Humidity</option>
+        <label>Air recordings in this file?
+          <select id="airMode">
+            <option value="none">No, every recording is the sample</option>
+            <option value="DA">Yes, alternating: sample first, then air</option>
+            <option value="AD">Yes, alternating: air first, then sample</option>
           </select>
         </label>
-        <label class="chk"><input type="checkbox" id="cmpNorm" checked> Subtract each recording's start value (baseline correction)</label>
-      </div>
-      <div id="cmpEmpty" class="muted">Load a file above to see the difference.</div>
-    </div>
-
-    <div class="card">
-      <h2>What is the difference? (in plain numbers)</h2>
-      <p class="muted small" id="diffNames"></p>
-      <div id="diffPlain"></div>
-      <div id="plotRatio" class="plot"></div>
-      <details class="howto"><summary>How to read these numbers</summary><ul>
-        <li><b>Reading</b>: the raw number a sensor gives out. It has no unit; what matters is how much it changes.</li>
-        <li><b>Average reading</b>: the mean of one 1-minute recording.</li>
-        <li><b>Change during the minute</b>: the reading at the end of a recording minus the reading at its start.</li>
-        <li><b>Normal variation</b>: how much repeat recordings of the same thing differ from each other. A difference smaller than this could just be chance.</li>
-        <li><b>2×</b> means the difference is twice the normal variation. Up to 1× = no real difference, 1–2× = small, 2–4× = clear, more than 4× = very clear.</li>
-      </ul></details>
-    </div>
-
-    <div class="card">
-      <h2>Curves</h2>
-      <div id="plotTrace" class="plot"></div>
-      <div class="grid2">
-        <div id="plotMean" class="plot"></div>
-        <div id="plotDiff" class="plot"></div>
-      </div>
-      <h3>Detailed numbers for every parameter</h3>
-      <div class="tablewrap"><table id="cmpTable" class="tbl"></table></div>
-    </div>
-  </section>
-
-  <!-- ============ PREDICT & TRAIN ============ -->
-  <section id="tab-predict" class="panel">
-    <div class="card">
-      <h2>Predict the mixture</h2>
-      <p class="muted">Upload a recording file. Mark which 1-minute recordings are <b>data</b> (sample) and which are <b>air</b>.
-        The model compares them with the mixtures it has learned. If the file also has air recordings, an air-corrected model gives a second opinion.</p>
-      <div id="trustBox"></div>
-      <div id="loaderP"></div>
-      <div class="row wrapgap">
-        <button id="btnPredict" class="btn primary" disabled>Predict configuration</button>
-        <button id="btnSuggest" class="btn" disabled title="Uses a data-vs-air random forest; accuracy is low on current data">Auto-suggest data/air</button>
-      </div>
-      <div id="predOut"></div>
-    </div>
-
-    <div class="card">
-      <h2>Use this file for training</h2>
-      <div class="row wrapgap">
-        <label>Label (configuration)
-          <select id="trainLabel"></select>
+        <label>Show
+          <select id="topN"><option value="3">Top 3 matches</option><option value="5" selected>Top 5 matches</option></select>
         </label>
-        <button id="btnAdd" class="btn primary" disabled>Add file to training set</button>
+        <label>Or try a recorded file
+          <select id="demo"><option value="">— choose —</option></select>
+        </label>
       </div>
-      <p class="muted small">Recordings marked "skip" are not used. The phases you set above are saved together with the label. Added data is stored in this browser.
-        Use <b>Export</b> to keep a copy or to commit it to the repository (<code>docs/data/extra_training.json</code> is loaded automatically for every visitor).</p>
+      <p class="muted small">The raw file is used as it is: the page cleans it, splits it into 1-minute recordings and normalizes each one before predicting. Nothing is uploaded anywhere.</p>
     </div>
+    <div id="predOut"></div>
+  </section>
 
+  <!-- ============ VISUALIZE ============ -->
+  <section id="tab-visual" class="panel">
     <div class="card">
-      <h2>Training set &amp; model</h2>
+      <h2>From salak to rosin</h2>
+      <div class="slider-row">
+        <span class="end">Salak 100%</span>
+        <input type="range" id="mix" min="0" max="100" step="1" value="50" aria-label="Rosin percent">
+        <span class="end">Rosin 100%</span>
+      </div>
+      <div class="mixlabel" id="mixLabel"></div>
       <div class="row wrapgap">
-        <label class="chk"><input type="checkbox" id="useBuiltin" checked> Include built-in dataset</label>
-        <button id="btnRetrain" class="btn primary">Retrain &amp; evaluate (70/30 split)</button>
-        <button id="btnExport" class="btn">Export training set</button>
-        <label class="btn filebtn">Import training set<input type="file" id="importFile" accept=".json" hidden></label>
-        <button id="btnReset" class="btn danger">Remove added data</button>
+        <label>Recordings from
+          <select id="vDay"></select>
+        </label>
+        <label>Value per recording
+          <select id="vMeasure">
+            <option value="level">Average reading</option>
+            <option value="change">Change during the minute</option>
+          </select>
+        </label>
+        <button class="btn" id="play">▶ Play 0 → 100%</button>
       </div>
-      <div class="tablewrap"><table id="trainTable" class="tbl"></table></div>
-      <div id="evalOut"></div>
+      <div id="vSummary"></div>
     </div>
-  </section>
-
-  <!-- ============ RESULTS ============ -->
-  <section id="tab-results" class="panel">
     <div class="card">
-      <h2>Model results (offline analysis)</h2>
-      <p class="muted">From <code>analysis/train.py</code>. The same Random Forest runs in this page.</p>
-      <div id="resMetrics"></div>
-    </div>
-    <div class="card figs">
-      <figure><img src="results/model_comparison.png" alt="Accuracy compared with baseline"><figcaption>Accuracy: random 70/30 splits (mean ± sd), fixed hold-out, and majority baseline</figcaption></figure>
+      <h2>Straight-line relationship, sensor by sensor</h2>
+      <p class="muted small">Each dot is one 1-minute recording. The line is the best straight line through them. The cross shows the value the line expects at the slider position.</p>
       <div class="grid2">
-        <figure><img src="results/confusion_air_calibrated.png" alt="Confusion matrix"><figcaption>Test-set confusion matrix (air-corrected model, day 1)</figcaption></figure>
-        <figure><img src="results/feature_importance.png" alt="Feature importance"><figcaption>Most informative features</figcaption></figure>
+        <div id="lin1" class="plot sm"></div><div id="lin2" class="plot sm"></div>
+        <div id="lin3" class="plot sm"></div><div id="lin4" class="plot sm"></div>
       </div>
-      <figure><img src="results/true_vs_estimated.png" alt="True vs estimated rosin" style="max-width:560px"><figcaption>True vs estimated rosin % for each mixture (5-fold cross-validation). Points on the dashed line would be perfect.</figcaption></figure>
-      <figure><img src="results/pca.png" alt="PCA"><figcaption>PCA: data vs air, and mixtures with and without air calibration</figcaption></figure>
-      <h3>Raw traces (red = data, blue = air, grey = layout pending)</h3>
-      <div id="rawFigs"></div>
     </div>
-  </section>
-
-  <!-- ============ SAMPLES ============ -->
-  <section id="tab-samples" class="panel">
     <div class="card">
-      <h2>Sample photos</h2>
-      <div id="gallery" class="gallery"></div>
+      <h2>Expected 1-minute response at this mixture</h2>
+      <p class="muted small">Blended from the two nearest recorded mixtures (thin lines). Each curve shows the change from the start of the recording.</p>
+      <div class="row wrapgap">
+        <label>Sensor
+          <select id="vSensor"><option>Sensor1</option><option selected>Sensor2</option><option>Sensor3</option><option>Sensor4</option></select>
+        </label>
+      </div>
+      <div id="curve" class="plot"></div>
     </div>
   </section>
 </main>
 
-<footer class="wrap muted small">
-  Everything runs in your browser. Uploaded files are not sent anywhere.
-</footer>
-
+<footer class="wrap muted small">Everything runs in your browser. Uploaded files are not sent anywhere.</footer>
 <script src="js/core.js"></script>
 <script src="js/app.js"></script>
 </body>

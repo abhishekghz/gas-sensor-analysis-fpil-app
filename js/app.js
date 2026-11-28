@@ -1,501 +1,240 @@
-/* Gas Sensor Analysis web app. All computation happens in the browser via GasCore (core.js). */
+/* Gas Sensor Analysis — simple app: Predict (upload raw CSV → top matches) and Visualize (salak → rosin). */
 (function () {
   "use strict";
   const C = window.GasCore;
-  const PARAMS = ["Sensor1", "Sensor2", "Sensor3", "Sensor4", "Temperature", "Humidity"];
-  const STORE_KEY = "gasSensor.userRecs.v1";
   const $ = (s) => document.querySelector(s);
-  const el = (tag, attrs = {}, html = "") => { const e = document.createElement(tag); Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v)); if (html) e.innerHTML = html; return e; };
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const cfgName = (p) => `Rosin ${p} – Salak ${100 - p}`;
   const pct = (v) => (v * 100).toFixed(0) + "%";
+  const cfgName = (p) => `Rosin ${p}% – Salak ${100 - p}%`;
   const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-
-  const S = { labels: {}, builtin: {}, builtinRecs: [], repoRecs: [], userRecs: [], models: {} };
-
-  // ---------------------------------------------------------------- storage
-  function loadUser() { try { const v = JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
-  function saveUser() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S.userRecs)); } catch (e) { alert("Could not save to browser storage; use Export to keep your data."); } }
-
-  // ---------------------------------------------------------------- helpers
-  function guessRosin(name) {
-    const n = name.toLowerCase();
-    let m = n.match(/rosin[^0-9]{0,4}(\d{1,3})\s*%/);
-    if (m) return +m[1];
-    m = n.match(/salak[^0-9]{0,4}(\d{1,3})\s*%/);
-    if (m) return 100 - +m[1];
-    if (n.includes("rosin") && !n.includes("salak")) return 100;
-    if (n.includes("salak") && !n.includes("rosin")) return 0;
-    return null;
-  }
-  function plotLayout(extra = {}) {
-    const ink = css("--ink"), line = css("--line");
-    return Object.assign({
-      paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", font: { color: ink, size: 12 },
-      margin: { l: 56, r: 12, t: 36, b: 80 }, legend: { orientation: "h", y: -0.32 },
-      xaxis: { gridcolor: line, zerolinecolor: line }, yaxis: { gridcolor: line, zerolinecolor: line },
-    }, extra);
-  }
+  const fmt = (v) => Math.round(v).toLocaleString("en-US");
   const PCFG = { responsive: true, displaylogo: false };
-
-  function makeFile(name, text) {
-    const d = C.parseCSV(text);
-    const segs = C.segment(d);
-    if (!segs.length) throw new Error("No recordings found (each recording needs at least 100 rows).");
-    const lab = S.labels[name];
-    const phases = lab && lab.phases && lab.phases.length === segs.length ? lab.phases.split("") : segs.map(() => "D");
-    segs.forEach((s) => (s.f = C.segmentFeatures(s.data)));
-    return { name, d, segs, phases, rosin_pct: lab ? lab.rosin_pct : guessRosin(name), fromLabels: !!(lab && lab.phases) };
+  function layout(extra = {}) {
+    const ink = css("--ink"), line = css("--line");
+    return Object.assign({ paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", font: { color: ink, size: 12 },
+      margin: { l: 56, r: 12, t: 40, b: 48 }, showlegend: false,
+      xaxis: { gridcolor: line, zerolinecolor: line }, yaxis: { gridcolor: line, zerolinecolor: line } }, extra);
   }
 
-  // ---------------------------------------------------------------- loader widget
-  function createLoader(container, title, onChange) {
-    const box = el("div", { class: "loader" });
-    box.innerHTML = `<h4>${esc(title)}</h4>
-      <label class="drop">Drop a CSV here or click to choose<input type="file" accept=".csv,text/csv" hidden></label>
-      <div class="or">or use a file from the repository:
-        <select class="pick"><option value="">— choose —</option></select></div>
-      <div class="fileinfo"></div>
-      <div class="patterns hidden">
-        <span class="small muted">Set phases:</span>
-        <button class="btn sm" data-p="D">All data</button>
-        <button class="btn sm" data-p="DA">Data/Air alternating</button>
-        <button class="btn sm" data-p="AD">Air/Data alternating</button>
-        <span class="small muted">first</span><input type="number" class="firstN" min="0" value="5"><button class="btn sm" data-p="firstN">data, then air</button>
-      </div>
-      <div class="tablewrap"><table class="tbl segtbl"></table></div>`;
-    container.appendChild(box);
-    const state = { file: null };
-    const pick = box.querySelector(".pick");
-    Object.keys(S.builtin).forEach((fn) => pick.appendChild(el("option", { value: fn }, esc(fn))));
-    const input = box.querySelector("input[type=file]"), drop = box.querySelector(".drop");
-    const set = (file) => { state.file = file; render(); onChange(state.file); };
-    const readFile = (f) => {
-      const r = new FileReader();
-      r.onload = () => { try { set(makeFile(f.name, r.result)); pick.value = ""; } catch (e) { alert(f.name + ": " + e.message); } };
-      r.readAsText(f);
-    };
-    input.addEventListener("change", () => input.files[0] && readFile(input.files[0]));
-    drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
-    drop.addEventListener("dragleave", () => drop.classList.remove("over"));
-    drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); e.dataTransfer.files[0] && readFile(e.dataTransfer.files[0]); });
-    pick.addEventListener("change", () => { if (pick.value) set(makeFile(pick.value, S.builtin[pick.value].text)); });
-    box.querySelector(".patterns").addEventListener("click", (e) => {
-      const p = e.target.dataset && e.target.dataset.p; if (!p || !state.file) return;
-      const n = state.file.segs.length, N = +box.querySelector(".firstN").value || 0;
-      state.file.phases = Array.from({ length: n }, (_, i) => p === "D" ? "D" : p === "DA" ? (i % 2 ? "A" : "D") : p === "AD" ? (i % 2 ? "D" : "A") : (i < N ? "D" : "A"));
-      render(); onChange(state.file);
-    });
-    function render() {
-      const f = state.file, info = box.querySelector(".fileinfo"), tbl = box.querySelector(".segtbl");
-      box.querySelector(".patterns").classList.toggle("hidden", !f);
-      if (!f) { info.innerHTML = ""; tbl.innerHTML = ""; return; }
-      info.innerHTML = `<b>${esc(f.name)}</b> · ${f.d.n} rows · ${f.segs.length} recordings` +
-        (f.rosin_pct != null ? ` · label: ${cfgName(f.rosin_pct)}` : "") +
-        (f.fromLabels ? ` · <span class="badge good">data/air layout from labels</span>` : ` · <span class="badge warn">check the data/air layout</span>`);
-      tbl.innerHTML = `<tr><th>#</th><th>Start</th><th>End</th><th class="num">Rows</th><th class="num">Gap before (s)</th><th>Phase</th></tr>` +
-        f.segs.map((s, i) => `<tr><td>${i + 1}</td><td>${s.start}</td><td>${s.end}</td><td class="num">${s.data.n}</td><td class="num">${s.gap == null ? "—" : s.gap}</td>
-          <td><select data-i="${i}" class="ph-${f.phases[i]}"><option value="D"${f.phases[i] === "D" ? " selected" : ""}>data</option><option value="A"${f.phases[i] === "A" ? " selected" : ""}>air</option><option value="X"${f.phases[i] === "X" ? " selected" : ""}>skip</option></select></td></tr>`).join("");
-      tbl.querySelectorAll("select").forEach((s) => s.addEventListener("change", () => { f.phases[+s.dataset.i] = s.value; s.className = "ph-" + s.value; onChange(f); }));
-    }
-    state.render = render;
-    return state;
-  }
+  const S = { labels: {}, files: {}, recs: [], model: null, mu: null, sd: null, fileMeans: [], dRef: 1 };
 
-  // ---------------------------------------------------------------- models
-  function trainingRecs() {
-    return ($("#useBuiltin").checked ? S.builtinRecs : []).concat(S.repoRecs, S.userRecs).filter((r) => r.phase === "D" || r.phase === "A");
-  }
-  function trainModels() {
-    const recs = trainingRecs();
-    const dat = recs.filter((r) => r.phase === "D");
-    const cal = C.airReference(recs);
-    S.models = {
-      raw: dat.length >= 2 && new Set(dat.map((r) => r.rosin_pct)).size >= 2 ? new C.RandomForest().fit(C.toX(dat), dat.map((r) => r.rosin_pct)) : null,
-      cal: cal.length >= 2 && new Set(cal.map((r) => r.rosin_pct)).size >= 2 ? new C.RandomForest().fit(C.toX(cal), cal.map((r) => r.rosin_pct)) : null,
-      air: new Set(recs.map((r) => r.phase)).size === 2 ? new C.RandomForest().fit(C.toX(recs), recs.map((r) => r.phase)) : null,
-      n: { dat: dat.length, cal: cal.length, all: recs.length },
-    };
-    renderTrainTable();
-  }
+  // ------------------------------------------------------------- known data + model
+  function dateOf(d, i) { return d.day ? `${String(d.day[i]).padStart(2, "0")}/${String(d.month[i]).padStart(2, "0")}` : "?"; }
+  const zvec = (f) => C.FEATS.map((k, j) => (f[k] - S.mu[j]) / S.sd[j]);
+  const dist = (a, b) => Math.sqrt(a.reduce((s, v, j) => s + (v - b[j]) ** 2, 0));
 
-  function evaluate() {
-    const recs = trainingRecs();
-    const out = [];
-    const run = (name, R) => {
-      const y = R.map((r) => r.rosin_pct);
-      const classes = Array.from(new Set(y)).sort((a, b) => a - b);
-      if (classes.length < 2) { out.push(`<p class="muted">${name}: needs at least 2 configurations.</p>`); return; }
-      const { train, test } = C.stratifiedSplit(y, 0.3, 42);
-      if (!test.length) { out.push(`<p class="muted">${name}: not enough recordings for a test split.</p>`); return; }
-      const m = new C.RandomForest().fit(train.map((i) => C.toX([R[i]])[0]), train.map((i) => y[i]));
-      const pred = m.predict(test.map((i) => C.toX([R[i]])[0]));
-      const acc = pred.filter((p, k) => p === y[test[k]]).length / test.length;
-      const counts = {}; y.forEach((v) => (counts[v] = (counts[v] || 0) + 1));
-      const base = Math.max(...Object.values(counts)) / y.length;
-      const cm = classes.map((t) => classes.map((p) => test.filter((i, k) => y[i] === t && pred[k] === p).length));
-      out.push(`<h3>${name}</h3><p class="kv">Train ${train.length} · test ${test.length} recordings ·
-        test accuracy <b>${pct(acc)}</b> <span class="badge ${acc > base + 0.1 ? "good" : acc > base ? "warn" : "bad"}">majority baseline ${pct(base)}</span></p>
-        <div class="tablewrap"><table class="tbl"><tr><th>true ↓ / predicted →</th>${classes.map((c) => `<th class="num">${c}%</th>`).join("")}</tr>
-        ${cm.map((row, i) => `<tr><th>${classes[i]}%</th>${row.map((v) => `<td class="num">${v}</td>`).join("")}</tr>`).join("")}</table></div>`);
-    };
-    run("Air-calibrated model (data − air)", C.airReference(recs));
-    run("Raw model (no air reference)", recs.filter((r) => r.phase === "D"));
-    $("#evalOut").innerHTML = out.join("") + `<p class="muted small">Stratified 70/30 split, seed 42, Random Forest with 100 trees. With few recordings per configuration, one recording moves the accuracy a lot.</p>`;
-  }
-
-  function renderTrainTable() {
-    const all = ($("#useBuiltin").checked ? S.builtinRecs.map((r) => Object.assign({ src: "built-in" }, r)) : [])
-      .concat(S.repoRecs.map((r) => Object.assign({ src: "repo extra" }, r)), S.userRecs.map((r) => Object.assign({ src: "added here" }, r)));
-    const rows = C.CONFIGS.map((p) => {
-      const g = all.filter((r) => r.rosin_pct === p);
-      const files = Array.from(new Set(g.map((r) => r.file)));
-      return `<tr><td>${cfgName(p)}</td><td class="num">${g.filter((r) => r.phase === "D").length}</td><td class="num">${g.filter((r) => r.phase === "A").length}</td>
-        <td class="small">${files.map((f) => esc(f) + ` <span class="badge">${esc(g.find((r) => r.file === f).src)}</span>`).join("<br>") || '<span class="muted">no data yet</span>'}</td></tr>`;
-    });
-    const m = S.models;
-    $("#trainTable").innerHTML = `<tr><th>Configuration</th><th class="num">Data rec.</th><th class="num">Air rec.</th><th>Files</th></tr>` + rows.join("") +
-      `<tr><td colspan="4" class="muted small">Model: Random Forest (100 trees). Trained on ${m.n ? m.n.dat : 0} data recordings (raw) and ${m.n ? m.n.cal : 0} air-calibrated recordings.
-      Configurations with no data cannot be predicted until you add them.</td></tr>`;
-  }
-
-  // ---------------------------------------------------------------- predict
-  function predict(f) {
-    const D = f.segs.map((s, i) => ({ s, i })).filter((o) => f.phases[o.i] === "D");
-    const A = f.segs.map((s, i) => ({ s, i })).filter((o) => f.phases[o.i] === "A");
-    if (!D.length) return { error: "Mark at least one recording as data." };
-    if (!S.models.raw) return { error: "No trained model — add training data first." };
-    const run = (model, X) => {
-      const P = model.predictProba(X);
-      const avg = model.classes.map((_, c) => C.mean(P.map((p) => p[c])));
-      const best = avg.indexOf(Math.max(...avg));
-      return { classes: model.classes, avg, best: model.classes[best], conf: avg[best], est: avg.reduce((s, p, c) => s + p * model.classes[c], 0),
-        per: D.map((o, k) => ({ rec: o.i + 1, start: o.s.start, cls: model.classes[P[k].indexOf(Math.max(...P[k]))], conf: Math.max(...P[k]), est: P[k].reduce((s, p, c) => s + p * model.classes[c], 0) })) };
-    };
-    const main = run(S.models.raw, D.map((o) => C.FEATS.map((k) => o.s.f[k])));
-    let second = null;
-    if (A.length && S.models.cal) {
-      const ref = {}; C.FEATS.forEach((k) => (ref[k] = C.mean(A.map((o) => o.s.f[k]))));
-      second = run(S.models.cal, D.map((o) => C.FEATS.map((k) => o.s.f[k] - ref[k])));
-    }
-    return Object.assign(main, { second, nAir: A.length });
-  }
-
-  function renderPrediction(f) {
-    const r = predict(f), out = $("#predOut");
-    if (r.error) { out.innerHTML = `<div class="notice warn">${esc(r.error)}</div>`; return; }
-    const trained = r.classes.map((c) => c + "%").join(", ");
-    const truth = f.rosin_pct != null ? `<p class="kv">File name / label says: <b>${cfgName(f.rosin_pct)}</b> ${f.rosin_pct === r.best ? '<span class="badge good">match</span>' : '<span class="badge bad">different</span>'}</p>` : "";
-    const second = r.second ? `<p class="kv small">Second opinion, air-corrected model (knows only ${r.second.classes.map((c) => c + "%").join(", ")}): <b>${cfgName(r.second.best)}</b> (${pct(r.second.conf)})</p>` : "";
-    out.innerHTML = `<div class="result"><div>
-        <div class="muted small">Best guess</div>
-        <div class="big">${cfgName(r.best)}</div>
-        <p class="kv">Model's confidence <b>${pct(r.conf)}</b> · estimated rosin ≈ <b>${r.est.toFixed(0)}%</b></p>
-        <p class="kv small muted">Based on ${r.per.length} sample recordings. The model knows these mixtures: ${trained} rosin.</p>
-        ${second}
-        ${truth}
-        ${trainingRecs().some((t) => t.file === f.name) ? '<p class="kv small"><span class="badge warn">note</span> This file is already in the training set, so this is not an independent test.</p>' : ""}
-        <p class="kv small"><span class="badge warn">experimental</span> Read the reliability note above before trusting this result.</p>
-      </div><div id="plotProb" class="plot"></div></div>
-      <h3>Per recording</h3><div class="tablewrap"><table class="tbl"><tr><th>#</th><th>Start</th><th>Best guess</th><th class="num">Confidence</th><th class="num">Est. rosin %</th></tr>
-      ${r.per.map((p) => `<tr><td>${p.rec}</td><td>${p.start}</td><td>${cfgName(p.cls)}</td><td class="num">${pct(p.conf)}</td><td class="num">${p.est.toFixed(0)}</td></tr>`).join("")}</table></div>`;
-    const y = C.CONFIGS.map((c) => { const i = r.classes.indexOf(c); return i < 0 ? 0 : r.avg[i]; });
-    Plotly.newPlot("plotProb", [{ type: "bar", x: C.CONFIGS.map((c) => `R${c}/S${100 - c}`), y,
-      marker: { color: C.CONFIGS.map((c) => (c === r.best ? css("--accent") : r.classes.includes(c) ? css("--air") : css("--line"))) },
-      hovertemplate: "%{x}: %{y:.0%}<extra></extra>" }],
-    plotLayout({ title: { text: "How likely is each mixture? (grey = not trained yet)", font: { size: 13 } }, yaxis: { tickformat: ".0%", range: [0, 1], gridcolor: css("--line") }, showlegend: false }), PCFG);
-    $("#trainLabel").value = String(f.rosin_pct != null ? f.rosin_pct : r.best);
-  }
-
-  function renderTrust() {
-    const m = S.metrics, box = $("#trustBox");
-    if (!m || !m.per_config_cv) { box.innerHTML = ""; return; }
-    const missing = C.CONFIGS.filter((c) => !(m.trained_configs || []).includes(c));
-    const cross = (m.cross_day || []).map((c) => `trained on ${esc(c.train_days.join(", "))}, tested on ${esc(c.test_day)}: <b>${pct(c.acc)}</b> right (pure guessing: ${pct(c.chance_acc)})`).join("; ");
-    box.innerHTML = `<div class="notice warn trust"><b>How reliable is the prediction? Work in progress.</b>
-      <ul>
-        <li>On days the model has already seen, it picks exactly the right mixture <b>${pct(m.cv5_acc)}</b> of the time. On average it is off by <b>${m.cv5_mae_pct.toFixed(0)}</b> rosin-% points.</li>
-        <li>On a <b>new day</b> it does not work yet: ${cross}.</li>
-        <li>It knows ${(m.trained_configs || []).map((c) => c + "%").join(", ")} rosin. Not yet: ${missing.map((c) => c + "%").join(", ") || "none"}.</li>
-        <li>To improve it: record lab air in every session, record the missing mixtures, and repeat on more days.</li>
-      </ul></div>`;
-  }
-
-  // ---------------------------------------------------------------- plain-language difference
-  const NICE = { Sensor1: "Sensor 1", Sensor2: "Sensor 2", Sensor3: "Sensor 3", Sensor4: "Sensor 4", Temperature: "Temperature", Humidity: "Humidity" };
-  const UNIT = { Temperature: " °C", Humidity: " % humidity" };
-  const fmtV = (p, v) => (p === "Temperature" || p === "Humidity" ? v.toFixed(1) : Math.round(v).toLocaleString("en-US")) + (UNIT[p] || "");
-  function perRec(segs, p, kind) { return segs.map((s) => { const y = s.data[p]; return kind === "level" ? C.mean(y) : C.mean(y, y.length - 30) - C.mean(y, 0, 3); }); }
-  function sdev(a) { if (a.length < 2) return null; const m = C.mean(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1)); }
-  function compareVals(a, b) {
-    const m1 = C.mean(a), m2 = C.mean(b), diff = m1 - m2, s1 = sdev(a), s2 = sdev(b);
-    let noise = s1 != null && s2 != null ? Math.sqrt(((a.length - 1) * s1 * s1 + (b.length - 1) * s2 * s2) / (a.length + b.length - 2)) : (s1 != null ? s1 : s2);
-    const ratio = noise != null && noise > 1e-9 ? Math.abs(diff) / noise : null;
-    return { m1, m2, diff, pct: Math.abs(m2) > 1e-9 ? (diff / Math.abs(m2)) * 100 : null, noise, ratio };
-  }
-  const VERDICT = [
-    { max: 1, label: "No real difference", cls: "", text: "It is smaller than the normal variation between repeat recordings, so it could be chance." },
-    { max: 2, label: "Small difference", cls: "warn", text: "It is a bit bigger than the normal variation between repeat recordings." },
-    { max: 4, label: "Clear difference", cls: "good", text: "It is well above the normal variation between repeat recordings." },
-    { max: Infinity, label: "Very clear difference", cls: "good", text: "It is far above the normal variation between repeat recordings." },
-  ];
-  const verdictOf = (r) => (r == null ? null : VERDICT.find((v) => r < v.max));
-  const times = (r) => (r == null ? "—" : r < 10 ? r.toFixed(1) + "×" : Math.round(r) + "×");
-  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
-  function levelSentence(p, v, n1, n2) {
-    if (v.pct == null) return "";
-    const dir = v.diff >= 0 ? "higher" : "lower";
-    if (p === "Temperature") return `${cap(esc(n1))} was ${Math.abs(v.diff).toFixed(1)} °C ${v.diff >= 0 ? "warmer" : "cooler"} than ${esc(n2)} (${fmtV(p, v.m1)} vs ${fmtV(p, v.m2)}).`;
-    if (p === "Humidity") return `${cap(esc(n1))} had ${Math.abs(v.diff).toFixed(1)} points ${dir} humidity than ${esc(n2)} (${fmtV(p, v.m1)} vs ${fmtV(p, v.m2)}).`;
-    return `With ${esc(n1)} the reading is <b>${Math.abs(v.pct).toFixed(1)}% ${dir}</b> than with ${esc(n2)} (${fmtV(p, v.m1)} vs ${fmtV(p, v.m2)}).`;
-  }
-  function respSentence(p, v, n1, n2) {
-    const w = (x) => (x >= 0 ? "rises" : "drops");
-    if (p === "Temperature" || p === "Humidity") return `During the minute it ${w(v.m1)} by ${Math.abs(v.m1).toFixed(1)} (${esc(n1)}) vs ${Math.abs(v.m2).toFixed(1)} (${esc(n2)}).`;
-    return `During the minute the reading ${w(v.m1)} by ${Math.round(Math.abs(v.m1)).toLocaleString("en-US")} with ${esc(n1)} and ${w(v.m2)} by ${Math.round(Math.abs(v.m2)).toLocaleString("en-US")} with ${esc(n2)}.`;
-  }
-
-  function renderPlainDiff(g1, g2, n1, n2) {
-    const box = $("#diffPlain");
-    if (!g1.length || !g2.length) { box.innerHTML = `<div class="notice">Mark at least one recording in each group (${esc(n1)} and ${esc(n2)}) to see the difference in numbers.</div>`; Plotly.purge($("#plotRatio")); return; }
-    const rows = PARAMS.map((p) => ({ p, lv: compareVals(perRec(g1, p, "level"), perRec(g2, p, "level")), rs: compareVals(perRec(g1, p, "resp"), perRec(g2, p, "resp")) }));
-    const canJudge = rows.some((r) => r.lv.ratio != null);
-    let best = null;
-    rows.filter((r) => r.p.startsWith("Sensor")).forEach((r) => [["lv", r.lv], ["rs", r.rs]].forEach(([k, v]) => {
-      const score = canJudge ? (v.ratio == null ? -1 : v.ratio) : Math.abs(v.pct || 0);
-      if (!best || score > best.score) best = { r, k, v, score };
+  async function loadKnown() {
+    S.labels = (await (await fetch("data/labels.json")).json()).files;
+    await Promise.all(Object.entries(S.labels).map(async ([fn, lab]) => {
+      const d = C.parseCSV(await (await fetch("data/" + encodeURIComponent(fn))).text());
+      const segs = C.segment(d);
+      segs.forEach((s) => (s.f = C.segmentFeatures(s.data)));
+      S.files[fn] = { d, segs, lab, date: dateOf(d, 0) };
+      if (lab.phases && lab.phases.length === segs.length)
+        segs.forEach((s, i) => { if (lab.phases[i] === "D") S.recs.push({ file: fn, rec: i + 1, rosin: lab.rosin_pct, date: S.files[fn].date, f: s.f, s }); });
     }));
-    const vd = verdictOf(best.v.ratio);
-    const head = best.k === "lv" ? `${NICE[best.r.p]}: ${levelSentence(best.r.p, best.v, n1, n2)}` : `${NICE[best.r.p]}: ${respSentence(best.r.p, best.v, n1, n2)}`;
-    const T = rows.find((r) => r.p === "Temperature").lv, H = rows.find((r) => r.p === "Humidity").lv;
-    const roomDiff = Math.abs(T.diff) >= 1 || Math.abs(H.diff) >= 3;
-    const room = roomDiff
-      ? `<p class="kv"><span class="badge warn">room</span> The room was not the same: ${levelSentence("Temperature", T, n1, n2)} ${levelSentence("Humidity", H, n1, n2)}
-         Temperature and humidity also change the sensor readings, so part of the difference may come from the room, not the sample.</p>`
-      : `<p class="kv"><span class="badge good">room</span> Temperature and humidity were similar in both (within 1 °C and 3 humidity points), so the room is unlikely to explain the difference.</p>`;
-    box.innerHTML = `<div class="headline">
-        <div class="muted small">In one sentence: the biggest difference between ${esc(n1)} and ${esc(n2)}</div>
-        <div class="hl">${head}</div>
-        ${vd ? `<p class="kv">That difference is <b>${times(best.v.ratio)}</b> the normal variation → <span class="badge ${vd.cls}">${vd.label}</span> ${vd.text}</p>`
-             : `<p class="kv"><span class="badge warn">can't judge</span> Each group needs at least 2 recordings to know the normal variation.</p>`}
-        ${room}
+    S.recs.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.rec - b.rec));
+    const X = C.toX(S.recs);
+    S.model = new C.RandomForest().fit(X, S.recs.map((r) => r.rosin));
+    S.mu = C.FEATS.map((_, j) => C.mean(X.map((x) => x[j])));
+    S.sd = C.FEATS.map((_, j) => { const v = Math.sqrt(C.mean(X.map((x) => (x[j] - S.mu[j]) ** 2))); return v < 1e-12 ? 1 : v; });
+    const byFile = {};
+    S.recs.forEach((r) => (byFile[r.file] = byFile[r.file] || []).push(r));
+    S.fileMeans = Object.entries(byFile).map(([file, rs]) => {
+      const z = rs.map((r) => zvec(r.f));
+      return { file, rosin: rs[0].rosin, date: rs[0].date, n: rs.length, z: C.FEATS.map((_, j) => C.mean(z.map((v) => v[j]))) };
+    });
+    const ds = [];
+    S.fileMeans.forEach((a, i) => S.fileMeans.slice(i + 1).forEach((b) => ds.push(dist(a.z, b.z))));
+    ds.sort((a, b) => a - b);
+    S.dRef = ds[Math.floor(ds.length / 2)] || 1;
+  }
+
+  // ------------------------------------------------------------- predict
+  function analyze(name, text) {
+    const steps = [];
+    const d = C.parseCSV(text);
+    steps.push(`Read ${fmt(d.n + d.dropped)} rows${d.dropped ? `, removed ${d.dropped} broken or empty rows` : ", no broken rows"}`);
+    const all = C.segment(d);
+    if (!all.length) throw new Error("No 1-minute recording found (a recording needs at least 100 rows without a time jump).");
+    steps.push(`Split into ${all.length} recording${all.length > 1 ? "s" : ""} wherever the clock jumps by more than 2 s`);
+    const mode = $("#airMode").value;
+    const phase = (i) => (mode === "none" ? "D" : mode === "DA" ? (i % 2 ? "A" : "D") : (i % 2 ? "D" : "A"));
+    const segs = all.map((s, i) => ({ s, i, ph: phase(i) }));
+    const D = segs.filter((o) => o.ph === "D");
+    if (!D.length) throw new Error("No sample recordings left after removing air.");
+    if (mode !== "none") steps.push(`Set aside ${segs.length - D.length} air recording${segs.length - D.length === 1 ? "" : "s"}, kept ${D.length} sample recording${D.length === 1 ? "" : "s"}`);
+    D.forEach((o) => (o.f = C.segmentFeatures(o.s.data)));
+    steps.push("Normalized each recording to its own starting value (removes slow drift between recordings)");
+    steps.push(`Measured ${C.FEATS.length} numbers per recording: response shape of each sensor, sensor-to-sensor ratios, temperature, humidity`);
+    steps.push(`Compared with ${S.recs.length} known recordings (${new Set(S.recs.map((r) => r.rosin)).size} mixtures) using a Random Forest of 100 trees`);
+
+    const X = D.map((o) => C.FEATS.map((k) => o.f[k]));
+    const P = S.model.predictProba(X);
+    const cls = S.model.classes;
+    const avg = cls.map((_, c) => C.mean(P.map((p) => p[c])));
+    const ranking = cls.map((c, i) => ({ rosin: c, p: avg[i] })).sort((a, b) => b.p - a.p);
+    const est = avg.reduce((s, p, i) => s + p * cls[i], 0);
+    const zu = C.FEATS.map((_, j) => C.mean(D.map((o) => zvec(o.f)[j])));
+    const files = S.fileMeans.map((m) => ({ ...m, sim: Math.exp(-dist(zu, m.z) / S.dRef) })).sort((a, b) => b.sim - a.sim);
+    const per = D.map((o, k) => {
+      const best = P[k].indexOf(Math.max(...P[k]));
+      const zr = zvec(o.f);
+      let near = null;
+      S.recs.forEach((r) => { const dd = dist(zr, zvec(r.f)); if (!near || dd < near.d) near = { d: dd, r }; });
+      return { rec: o.i + 1, start: o.s.start, rosin: cls[best], p: P[k][best], near: near.r };
+    });
+    return { name, steps, ranking, est, files, per, nRec: D.length, known: !!S.labels[name] };
+  }
+
+  function renderPrediction(r) {
+    const N = +$("#topN").value;
+    const top = r.ranking.slice(0, N), best = top[0];
+    const missing = C.CONFIGS.filter((c) => !r.ranking.some((x) => x.rosin === c));
+    $("#predOut").innerHTML = `
+      <div class="card">
+        <h2>Result for <span class="fname">${esc(r.name)}</span></h2>
+        ${r.known ? '<p class="notice warn small">This file is one of the known recordings, so it will naturally match itself. Upload a new file for a real test.</p>' : ""}
+        <div class="result">
+          <div class="bestbox">
+            <div class="muted small">Best match</div>
+            <div class="big">${cfgName(best.rosin)}</div>
+            <p class="kv">Likelihood <b>${pct(best.p)}</b> · estimated rosin ≈ <b>${r.est.toFixed(0)}%</b></p>
+            <p class="kv small muted">From ${r.nRec} sample recording${r.nRec > 1 ? "s" : ""} in your file.</p>
+          </div>
+          <div>
+            <h3>Top ${N} mixtures</h3>
+            <ol class="toplist">${top.map((t, i) => `<li><span class="rank">${i + 1}</span><span class="tname">${cfgName(t.rosin)}</span>
+              <span class="bar"><span style="width:${(t.p * 100).toFixed(1)}%"></span></span><span class="tval">${pct(t.p)}</span></li>`).join("")}</ol>
+            ${missing.length ? `<p class="muted small">Not possible yet (no known recordings): ${missing.map((c) => c + "%").join(", ")} rosin.</p>` : ""}
+          </div>
+        </div>
       </div>
-      <div class="cards">${rows.map((r) => {
-        const v1 = verdictOf(r.lv.ratio), v2 = verdictOf(r.rs.ratio);
-        const top = [v1, v2].filter(Boolean).sort((a, b) => VERDICT.indexOf(b) - VERDICT.indexOf(a))[0];
-        return `<div class="pcard"><div class="pc-head"><b>${NICE[r.p]}</b>${top ? `<span class="badge ${top.cls}">${top.label}</span>` : ""}</div>
-          <p><span class="muted small">Average reading</span><br>${levelSentence(r.p, r.lv, n1, n2)} <span class="muted small">(${times(r.lv.ratio)} normal variation)</span></p>
-          <p><span class="muted small">Change during the minute</span><br>${respSentence(r.p, r.rs, n1, n2)} <span class="muted small">(${times(r.rs.ratio)} normal variation)</span></p></div>`;
-      }).join("")}</div>`;
-    if (canJudge) {
-      const names = rows.map((r) => NICE[r.p]).reverse();
-      const zone = (x0, x1, color) => ({ type: "rect", xref: "x", yref: "paper", x0, x1, y0: 0, y1: 1, fillcolor: color, opacity: 0.12, line: { width: 0 }, layer: "below" });
-      const xmax = Math.max(5, ...rows.flatMap((r) => [r.lv.ratio || 0, r.rs.ratio || 0])) * 1.1;
-      Plotly.newPlot("plotRatio", [
-        { type: "bar", orientation: "h", y: names, x: rows.map((r) => r.lv.ratio).reverse(), name: "Average reading", marker: { color: css("--accent") }, hovertemplate: "%{y}: %{x:.1f}× normal variation<extra>Average reading</extra>" },
-        { type: "bar", orientation: "h", y: names, x: rows.map((r) => r.rs.ratio).reverse(), name: "Change during the minute", marker: { color: css("--air") }, hovertemplate: "%{y}: %{x:.1f}× normal variation<extra>Change during the minute</extra>" },
-      ], plotLayout({
-        title: { text: "How big is each difference? (1× = normal variation between repeat recordings)", font: { size: 13 } }, barmode: "group",
-        xaxis: { title: "difference ÷ normal variation", range: [0, xmax], gridcolor: css("--line") },
-        shapes: [zone(0, 1, "#888888"), zone(1, 2, "#e3a04f"), zone(2, 4, "#6fcf73"), zone(4, xmax, "#2e7d32")],
-        annotations: [[0.5, "no real<br>difference"], [1.5, "small"], [3, "clear"], [Math.min(xmax * 0.9, 6), "very clear"]].map(([x, t]) => ({ x, y: 1.02, yref: "paper", text: t, showarrow: false, font: { size: 10, color: css("--muted") }, yanchor: "bottom" })),
-        margin: { l: 90, r: 12, t: 70, b: 80 },
+      <div class="card">
+        <h2>Top ${N} closest known recordings</h2>
+        <p class="muted small">How similar your file is to each recorded file (100% = identical after normalization).</p>
+        <div class="tablewrap"><table class="tbl"><tr><th>#</th><th>Known file</th><th>Mixture</th><th>Recorded</th><th class="num">Similarity</th></tr>
+        ${r.files.slice(0, N).map((f, i) => `<tr><td>${i + 1}</td><td class="small">${esc(f.file)}</td><td>${cfgName(f.rosin)}</td><td>${esc(f.date)}</td><td class="num"><b>${pct(f.sim)}</b></td></tr>`).join("")}</table></div>
+      </div>
+      <div class="card">
+        <h2>What the page did with your raw file</h2>
+        <ol class="steps">${r.steps.map((s) => `<li>✓ ${esc(s)}</li>`).join("")}</ol>
+        <details><summary>Result per recording</summary>
+          <div class="tablewrap"><table class="tbl"><tr><th>Recording</th><th>Start</th><th>Best match</th><th class="num">Likelihood</th><th>Closest known recording</th></tr>
+          ${r.per.map((p) => `<tr><td>${p.rec}</td><td>${p.start}</td><td>${cfgName(p.rosin)}</td><td class="num">${pct(p.p)}</td><td class="small">${esc(p.near.file)} #${p.near.rec} (${p.near.rosin}%)</td></tr>`).join("")}</table></div>
+        </details>
+        <p class="muted small">How reliable: for recordings from days already seen, the right mixture is in the top 3 about 8 times out of 10 and is the best match about 5–6 times out of 10. On a brand-new day it is less reliable, so recording lab air in the same session helps.</p>
+      </div>`;
+  }
+
+  let last = null;
+  function runPredict(name, text) {
+    try { last = analyze(name, text); renderPrediction(last); }
+    catch (e) { $("#predOut").innerHTML = `<div class="card"><div class="notice warn">${esc(name)}: ${esc(e.message)}</div></div>`; }
+  }
+
+  // ------------------------------------------------------------- visualize
+  function value(s, p, m) { const y = s.data[p]; return m === "level" ? C.mean(y) : C.mean(y, y.length - 30) - C.mean(y, 0, 3); }
+  function fit(xs, ys) {
+    const mx = C.mean(xs), my = C.mean(ys);
+    let sxy = 0, sxx = 0, syy = 0;
+    xs.forEach((x, i) => { sxy += (x - mx) * (ys[i] - my); sxx += (x - mx) ** 2; syy += (ys[i] - my) ** 2; });
+    const b = sxx ? sxy / sxx : 0, a = my - b * mx;
+    return { a, b, r2: sxx && syy ? (sxy * sxy) / (sxx * syy) : 0 };
+  }
+  const strength = (r2) => (r2 < 0.1 ? "no clear straight-line link" : r2 < 0.3 ? "weak link" : r2 < 0.6 ? "moderate link" : "strong link");
+  function visRecs() { const d = $("#vDay").value; return S.recs.filter((r) => d === "all" || r.date === d); }
+
+  function renderVisual() {
+    const p = +$("#mix").value, m = $("#vMeasure").value, R = visRecs();
+    $("#mixLabel").innerHTML = `<b>Rosin ${p}%</b> · Salak ${100 - p}%`;
+    const xs = R.map((r) => r.rosin);
+    const mixes = Array.from(new Set(xs)).sort((a, b) => a - b);
+    const lines = [];
+    C.SENSORS.forEach((sn, k) => {
+      const ys = R.map((r) => value(r.s, sn, m)), F = fit(xs, ys), at = F.a + F.b * p;
+      const means = mixes.map((c) => C.mean(ys.filter((_, i) => xs[i] === c)));
+      const change100 = F.b * 100, base = Math.abs(F.a) > 1e-9 ? (change100 / Math.abs(F.a)) * 100 : null;
+      lines.push({ sn, F, at, change100, base });
+      Plotly.react(`lin${k + 1}`, [
+        { x: xs, y: ys, mode: "markers", marker: { size: 7, color: css("--air"), opacity: 0.55 }, hovertemplate: "rosin %{x}%<br>%{y:.0f}<extra></extra>" },
+        { x: mixes, y: means, mode: "markers", marker: { size: 11, color: css("--ink"), symbol: "diamond" }, hovertemplate: "average at %{x}%: %{y:.0f}<extra></extra>" },
+        { x: [0, 100], y: [F.a, F.a + F.b * 100], mode: "lines", line: { color: css("--accent"), width: 2.5 }, hoverinfo: "skip" },
+        { x: [p], y: [at], mode: "markers", marker: { size: 16, color: css("--accent"), symbol: "x-thin", line: { width: 3, color: css("--accent") } }, hovertemplate: `expected at ${p}%: %{y:.0f}<extra></extra>` },
+      ], layout({
+        title: { text: `${sn.replace("Sensor", "Sensor ")} — R² = ${F.r2.toFixed(2)} (${strength(F.r2)})`, font: { size: 13 } },
+        xaxis: { title: "rosin %", range: [-5, 105], dtick: 10, gridcolor: css("--line") },
+        yaxis: { title: m === "level" ? "average reading" : "change in reading", gridcolor: css("--line") },
+        shapes: [{ type: "line", x0: p, x1: p, yref: "paper", y0: 0, y1: 1, line: { color: css("--accent"), width: 1, dash: "dot" } }],
+        margin: { l: 60, r: 10, t: 40, b: 44 },
       }), PCFG);
-    } else Plotly.purge($("#plotRatio"));
-  }
-
-  // ---------------------------------------------------------------- compare
-  function resampleMean(segs, param, norm) {
-    const G = 200;
-    const curves = segs.map((s) => {
-      const y = s.data[param], n = y.length, y0 = norm ? C.mean(y, 0, 3) : 0;
-      return Array.from({ length: G }, (_, g) => y[Math.min(n - 1, Math.round((g / (G - 1)) * (n - 1)))] - y0);
     });
-    const dur = segs.length ? C.mean(segs.map((s) => s.data.t[s.data.n - 1] - s.data.t[0] + 1)) : 60;
-    const x = Array.from({ length: G }, (_, g) => (g / (G - 1)) * dur);
-    const m = x.map((_, g) => C.mean(curves.map((c) => c[g])));
-    const sd = x.map((_, g) => Math.sqrt(C.mean(curves.map((c) => (c[g] - m[g]) ** 2))));
-    return { x, m, sd, n: curves.length };
-  }
-  function groupStats(segs, param) {
-    if (!segs.length) return null;
-    const lv = segs.map((s) => C.mean(s.data[param])), rs = segs.map((s) => { const y = s.data[param]; return C.mean(y, y.length - 30) - C.mean(y, 0, 3); });
-    return { level: C.mean(lv), resp: C.mean(rs) };
+    const best = lines.slice().sort((a, b) => b.F.r2 - a.F.r2)[0];
+    const what = m === "level" ? "average reading" : "change during the minute";
+    $("#vSummary").innerHTML = `<div class="headline">
+        <div class="hl">At Rosin ${p}%, the straight lines expect: ${lines.map((l) => `${l.sn.replace("Sensor", "S")} ≈ <b>${fmt(l.at)}</b>`).join(" · ")}</div>
+        <p class="kv">Going from pure salak to pure rosin, the ${what} of <b>${best.sn.replace("Sensor", "Sensor ")}</b> changes by <b>${best.change100 >= 0 ? "+" : ""}${fmt(best.change100)}</b>${best.base != null && m === "level" ? ` (${best.base >= 0 ? "+" : ""}${best.base.toFixed(1)}%)` : ""}.
+        This is the clearest of the 4 sensors, and its straight line explains <b>${pct(best.F.r2)}</b> of the variation between recordings (${strength(best.F.r2)}).</p>
+        <p class="muted small">${R.length} recordings · mixtures ${mixes.map((c) => c + "%").join(", ")}. R² goes from 0 (no straight-line link) to 1 (all dots on the line).</p></div>`;
+    renderCurve(p, R, mixes);
   }
 
-  function renderCompare() {
-    const mode = document.querySelector("input[name=cmpMode]:checked").value;
-    const fa = S.loadA.file, fb = S.loadB.file, param = $("#cmpParam").value, norm = $("#cmpNorm").checked;
-    $("#loaderB").classList.toggle("hidden", mode !== "two");
-    $("#loaderA").parentElement.classList.toggle("grid2", mode === "two");
-    const has = fa && (mode === "air" || fb);
-    $("#cmpEmpty").classList.toggle("hidden", !!has);
-    ["#plotTrace", "#plotMean", "#plotDiff"].forEach((id) => { if (!has) Plotly.purge($(id)); });
-    if (!has) { $("#cmpTable").innerHTML = ""; $("#diffPlain").innerHTML = ""; Plotly.purge($("#plotRatio")); return; }
-    const pick = (f, ph) => f.segs.filter((_, i) => f.phases[i] === ph);
-    let g1, g2, n1, n2;
-    if (mode === "air") { g1 = pick(fa, "D"); g2 = pick(fa, "A"); n1 = "Data"; n2 = "Air"; }
-    else { g1 = pick(fa, "D"); g2 = pick(fb, "D"); n1 = "A: " + fa.name; n2 = "B: " + fb.name; }
-    const c1 = css("--data"), c2 = mode === "air" ? css("--air") : css("--b");
-    renderPlainDiff(g1, g2, mode === "air" ? "the sample" : "file A", mode === "air" ? "air" : "file B");
-    $("#diffNames").innerHTML = mode === "air" ? `Comparing the <b>sample</b> recordings (${g1.length}) with the <b>air</b> recordings (${g2.length}) in ${esc(fa.name)}.`
-      : `Comparing the sample recordings of <b>file A</b> = ${esc(fa.name)} (${g1.length}) with <b>file B</b> = ${esc(fb.name)} (${g2.length}).`;
-
-    // full trace
-    const traces = [];
-    const addFile = (f, label, colD, colA) => {
-      let x0 = 0;
-      f.segs.forEach((s, i) => {
-        const ph = f.phases[i]; if (ph === "X") { x0 += s.data.n + 40; return; }
-        const y = s.data[param], y0 = norm ? C.mean(y, 0, 3) : 0;
-        traces.push({ x: y.map((_, k) => x0 + k), y: y.map((v) => v - y0), mode: "lines", line: { width: 1.2, color: ph === "D" ? colD : colA },
-          name: `${label}${ph === "D" ? "data" : "air"}`, legendgroup: label + ph, showlegend: !traces.some((t) => t.legendgroup === label + ph),
-          hovertemplate: `#${i + 1} ${s.start} ${ph === "D" ? "data" : "air"}<br>%{y:.2f}<extra></extra>` });
-        x0 += s.data.n + 40;
-      });
-    };
-    addFile(fa, mode === "two" ? "A " : "", c1, css("--air"));
-    if (mode === "two") addFile(fb, "B ", c2, css("--muted"));
-    Plotly.newPlot("plotTrace", traces, plotLayout({ title: { text: `${param} — all recordings in order${norm ? " (start subtracted)" : ""}`, font: { size: 13 } }, xaxis: { title: "sample (recordings placed side by side)", gridcolor: css("--line") } }), PCFG);
-
-    const band = (r, color, name) => [
-      { x: r.x.concat(r.x.slice().reverse()), y: r.m.map((v, i) => v + r.sd[i]).concat(r.m.map((v, i) => v - r.sd[i]).reverse()), fill: "toself", fillcolor: color + "33", line: { width: 0 }, hoverinfo: "skip", showlegend: false },
-      { x: r.x, y: r.m, mode: "lines", line: { color, width: 2 }, name: `${name} (n=${r.n})` }];
-    const r1 = resampleMean(g1, param, norm), r2 = resampleMean(g2, param, norm);
-    const mt = []; if (r1.n) mt.push(...band(r1, c1, n1)); if (r2.n) mt.push(...band(r2, c2, n2));
-    Plotly.newPlot("plotMean", mt, plotLayout({ title: { text: `Average recording ± 1 sd`, font: { size: 13 } }, xaxis: { title: "seconds into recording", gridcolor: css("--line") } }), PCFG);
-    if (r1.n && r2.n) {
-      Plotly.newPlot("plotDiff", [{ x: r1.x, y: r1.m.map((v, i) => v - r2.m[i]), mode: "lines", line: { color: css("--accent"), width: 2 }, name: "difference" }],
-        plotLayout({ title: { text: `Difference: ${mode === "air" ? "data − air" : "A − B"}`, font: { size: 13 } }, xaxis: { title: "seconds into recording", gridcolor: css("--line") }, showlegend: false }), PCFG);
-    } else { Plotly.purge($("#plotDiff")); $("#plotDiff").innerHTML = `<p class="muted">Need recordings in both groups for a difference (${esc(n1)}: ${r1.n}, ${esc(n2)}: ${r2.n}). Set the phases in the table above.</p>`; }
-
-    const f2 = (v) => (v == null ? "—" : Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2));
-    $("#cmpTable").innerHTML = `<tr><th>Parameter</th><th class="num">${esc(n1)} level</th><th class="num">${esc(n2)} level</th><th class="num">Δ level</th><th class="num">Δ %</th>
-      <th class="num">${esc(n1)} response</th><th class="num">${esc(n2)} response</th><th class="num">Δ response</th></tr>` +
-      PARAMS.map((p) => {
-        const a = groupStats(g1, p), b = groupStats(g2, p), dl = a && b ? a.level - b.level : null;
-        return `<tr><td>${p}</td><td class="num">${f2(a && a.level)}</td><td class="num">${f2(b && b.level)}</td><td class="num">${f2(dl)}</td><td class="num">${dl == null ? "—" : ((dl / b.level) * 100).toFixed(2) + "%"}</td>
-          <td class="num">${f2(a && a.resp)}</td><td class="num">${f2(b && b.resp)}</td><td class="num">${f2(a && b ? a.resp - b.resp : null)}</td></tr>`;
-      }).join("") + `<tr><td colspan="8" class="muted small">Level = mean over the recording. Response = end (last 30 rows) − start (first 3 rows).</td></tr>`;
+  function meanCurve(R, sn, G = 120) {
+    const cs = R.map((r) => { const y = r.s.data[sn], n = y.length, y0 = C.mean(y, 0, 3); return Array.from({ length: G }, (_, g) => y[Math.min(n - 1, Math.round((g / (G - 1)) * (n - 1)))] - y0); });
+    return Array.from({ length: G }, (_, g) => C.mean(cs.map((c) => c[g])));
+  }
+  function renderCurve(p, R, mixes) {
+    const sn = $("#vSensor").value, G = 120, x = Array.from({ length: G }, (_, g) => (g / (G - 1)) * 60);
+    let lo = mixes.filter((c) => c <= p).pop(), hi = mixes.find((c) => c >= p);
+    if (lo == null) lo = hi; if (hi == null) hi = lo;
+    const cLo = meanCurve(R.filter((r) => r.rosin === lo), sn), cHi = meanCurve(R.filter((r) => r.rosin === hi), sn);
+    const w = hi === lo ? 0 : (p - lo) / (hi - lo);
+    const blend = cLo.map((v, i) => v * (1 - w) + cHi[i] * w);
+    const traces = [{ x, y: cLo, mode: "lines", line: { color: css("--muted"), width: 1, dash: "dot" }, name: `rosin ${lo}%` }];
+    if (hi !== lo) traces.push({ x, y: cHi, mode: "lines", line: { color: css("--muted"), width: 1, dash: "dash" }, name: `rosin ${hi}%` });
+    traces.push({ x, y: blend, mode: "lines", line: { color: css("--accent"), width: 3 }, name: `expected at ${p}%` });
+    Plotly.react("curve", traces, layout({ showlegend: true, legend: { orientation: "h", y: -0.25 },
+      title: { text: `${sn.replace("Sensor", "Sensor ")}: expected change from start at Rosin ${p}%${hi === lo ? "" : ` (blend of ${lo}% and ${hi}%)`}`, font: { size: 13 } },
+      xaxis: { title: "seconds into the recording", gridcolor: css("--line") }, yaxis: { title: "change from start", gridcolor: css("--line") },
+      margin: { l: 60, r: 12, t: 40, b: 80 } }), PCFG);
   }
 
-  // ---------------------------------------------------------------- results + samples
-  async function renderResults() {
-    const m = S.metrics;
-    if (!m) { $("#resMetrics").textContent = "Could not load metrics.json"; return; }
-    const rows = [["mixture_raw", "Mixture (main model)"], ["mixture_air_calibrated", "Mixture, air-corrected (day 1 only)"], ["data_vs_air", "Sample vs air"]].map(([k, t]) => {
-      const r = m[k], v = r.models["Random forest"];
-      return `<tr><td>${t}</td><td class="num">${r.n}</td><td class="num">${pct(v.holdout_acc)} <span class="muted">(n=${v.holdout_n_test})</span></td><td class="num">${pct(v.repeated_mean)} ± ${pct(v.repeated_std)}</td>
-        <td class="num">${v.lofo_acc == null ? "—" : pct(v.lofo_acc)}</td><td class="num">${pct(r.majority_baseline)}</td></tr>`;
-    });
-    const per = (m.per_config_cv || []).map((r) => `<tr><td>${cfgName(r.rosin_pct)}</td><td class="num">${r.n}</td><td class="num">${pct(r.exact_correct)}</td><td class="num">${r.mean_estimate.toFixed(0)}% ± ${r.sd_estimate.toFixed(0)}</td></tr>`).join("");
-    const cross = (m.cross_day || []).map((c) => `<tr><td>${esc(c.train_days.join(", "))}</td><td>${esc(c.test_day)}</td><td class="num">${c.n_test}</td><td class="num">${pct(c.acc)}</td><td class="num">${pct(c.chance_acc)}</td><td class="num">${c.mean_abs_error_pct.toFixed(0)}</td></tr>`).join("");
-    const unk = Object.entries(m.unseen_mixtures_raw_model || {}).map(([f, v]) => `<tr><td>${esc(f)}</td><td class="num">${v.true_rosin_pct}%</td><td class="num">${v.estimated_rosin_pct_mean.toFixed(0)}%</td></tr>`).join("");
-    const missing = C.CONFIGS.filter((c) => !(m.trained_configs || []).includes(c));
-    $("#resMetrics").innerHTML = `<div class="grid2 status">
-        <div class="notice"><b>Works now</b><ul><li>Splitting each file into 1-minute recordings</li><li>Comparing sample vs air, or two files, in plain numbers</li>
-          <li>Guessing the mixture for recordings from days it has seen (${pct(m.cv5_acc)} exactly right, 7 mixtures)</li><li>Adding new labelled files and retraining in the browser</li></ul></div>
-        <div class="notice warn"><b>Not yet</b><ul><li>Guessing the mixture on a new day (${(m.cross_day || []).map((c) => pct(c.acc)).join(" / ")} right)</li>
-          <li>Telling sample from air reliably</li><li>Mixtures ${missing.map((c) => c + "%").join(", ")} rosin (no labelled data)</li><li>Air recordings on day 2, needed to correct the day-to-day shift</li></ul></div></div>
-      <h3>Accuracy (Random Forest, 70 % train / 30 % test)</h3>
-      <div class="tablewrap"><table class="tbl"><tr><th>Task</th><th class="num">Recordings</th><th class="num">Test set (70/30)</th><th class="num">Mean of ${m.repeats} random splits</th><th class="num">New file (leave-one-out)</th><th class="num">Guessing baseline</th></tr>${rows.join("")}</table></div>
-      <h3>Per mixture (5-fold cross-validation)</h3>
-      <div class="tablewrap"><table class="tbl"><tr><th>True mixture</th><th class="num">Recordings</th><th class="num">Exactly right</th><th class="num">Average estimate</th></tr>${per}</table></div>
-      <h3>New day test (train on one day, test on the other)</h3>
-      <div class="tablewrap"><table class="tbl"><tr><th>Train day</th><th>Test day</th><th class="num">Test recordings</th><th class="num">Exactly right</th><th class="num">Pure guessing</th><th class="num">Average error (% points)</th></tr>${cross}</table></div>
-      <p class="muted small">The sensors read clearly lower on 25/11 than on 23/11, and day 2 has no air recordings to correct for it, so the model learns the day rather than the mixture.</p>
-      ${unk ? `<h3>Recorded but not labelled yet</h3><div class="tablewrap"><table class="tbl"><tr><th>File</th><th class="num">True rosin</th><th class="num">Estimated</th></tr>${unk}</table></div>` : ""}`;
-    $("#rawFigs").innerHTML = Object.keys(S.labels).map((fn) => {
-      const img = "results/raw_" + fn.replace(".csv", "").replaceAll("%", "pct").replaceAll("(", "_").replaceAll(")", "").replaceAll("+", "_") + ".png";
-      return `<figure><img loading="lazy" src="${encodeURI(img)}" alt="${esc(fn)}"><figcaption>${esc(fn)}</figcaption></figure>`;
-    }).join("");
-  }
-  function renderGallery() {
-    const have = new Set(S.builtinRecs.concat(S.repoRecs, S.userRecs).map((r) => r.rosin_pct));
-    const pending = new Set(Object.values(S.labels).filter((l) => !l.phases).map((l) => l.rosin_pct));
-    $("#gallery").innerHTML = C.CONFIGS.map((p) => {
-      const f = `images/rosin${String(p).padStart(3, "0")}_salak${String(100 - p).padStart(3, "0")}.webp`;
-      return `<figure><img loading="lazy" src="${f}" alt="${cfgName(p)}"><figcaption>Rosin ${p}% + Salak ${100 - p}%<span class="has">${have.has(p) ? "✔ sensor data in training" : pending.has(p) ? "recorded · data/air layout pending" : "sensor data pending"}</span></figcaption></figure>`;
-    }).join("");
-  }
+  let raf = 0, playing = null;
+  const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(renderVisual); };
 
-  // ---------------------------------------------------------------- boot
+  // ------------------------------------------------------------- boot
   async function boot() {
     document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
       document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === b));
       document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + b.dataset.tab));
+      if (b.dataset.tab === "visual") renderVisual();
       window.dispatchEvent(new Event("resize"));
     }));
-    S.labels = (await (await fetch("data/labels.json")).json()).files;
-    await Promise.all(Object.keys(S.labels).map(async (fn) => {
-      const text = await (await fetch("data/" + encodeURIComponent(fn))).text();
-      S.builtin[fn] = { text };
-      const f = makeFile(fn, text);
-      if (S.labels[fn].phases) f.segs.forEach((s, i) => S.builtinRecs.push({ file: fn, seg: i + 1, phase: f.phases[i], rosin_pct: f.rosin_pct, f: s.f }));
-    }));
-    try { const x = await fetch("data/extra_training.json"); if (x.ok) S.repoRecs = (await x.json()).recs || []; } catch (e) { /* optional */ }
-    S.userRecs = loadUser();
-    try { S.metrics = await (await fetch("results/metrics.json")).json(); } catch (e) { S.metrics = null; }
+    await loadKnown();
 
-    $("#trainLabel").innerHTML = C.CONFIGS.map((p) => `<option value="${p}">${cfgName(p)}</option>`).join("");
-    S.loadA = createLoader($("#loaderA"), "Dataset A", renderCompare);
-    S.loadB = createLoader($("#loaderB"), "Dataset B", renderCompare);
-    document.querySelectorAll("input[name=cmpMode]").forEach((r) => r.addEventListener("change", renderCompare));
-    $("#cmpParam").addEventListener("change", renderCompare);
-    $("#cmpNorm").addEventListener("change", renderCompare);
+    const read = (file) => { const r = new FileReader(); r.onload = () => { $("#demo").value = ""; runPredict(file.name, r.result); }; r.readAsText(file); };
+    const fi = $("#fileIn"), drop = $("#drop");
+    fi.addEventListener("change", () => { if (fi.files[0]) read(fi.files[0]); fi.value = ""; });
+    drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+    drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+    drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) read(e.dataTransfer.files[0]); });
+    Object.keys(S.files).sort().forEach((fn) => $("#demo").insertAdjacentHTML("beforeend", `<option value="${esc(fn)}">${esc(fn)}</option>`));
+    const rawText = async (fn) => (await fetch("data/" + encodeURIComponent(fn))).text();
+    $("#demo").addEventListener("change", async () => { const fn = $("#demo").value; if (fn) runPredict(fn, await rawText(fn)); });
+    $("#topN").addEventListener("change", () => last && renderPrediction(last));
+    $("#airMode").addEventListener("change", async () => { const fn = $("#demo").value; if (fn) runPredict(fn, await rawText(fn)); else if (last) $("#predOut").insertAdjacentHTML("afterbegin", '<div class="notice warn">Air setting changed: upload the file again to apply it.</div>'); });
 
-    S.loadP = createLoader($("#loaderP"), "File to predict", (f) => {
-      ["#btnPredict", "#btnSuggest", "#btnAdd"].forEach((b) => ($(b).disabled = !f));
-      $("#predOut").innerHTML = "";
-      if (f && f.rosin_pct != null) $("#trainLabel").value = String(f.rosin_pct);
+    const days = Array.from(new Set(S.recs.map((r) => r.date))).sort();
+    const nMix = (d) => new Set(S.recs.filter((r) => r.date === d).map((r) => r.rosin)).size;
+    const full = days.slice().sort((a, b) => nMix(b) - nMix(a))[0];
+    $("#vDay").innerHTML = days.map((d) => `<option value="${d}"${d === full ? " selected" : ""}>${d} only (${nMix(d)} mixtures, same session)</option>`).join("") + `<option value="all">Both days together</option>`;
+    $("#mix").addEventListener("input", schedule);
+    ["#vDay", "#vMeasure", "#vSensor"].forEach((id) => $(id).addEventListener("change", renderVisual));
+    $("#play").addEventListener("click", () => {
+      if (playing) { clearInterval(playing); playing = null; $("#play").textContent = "▶ Play 0 → 100%"; return; }
+      $("#mix").value = 0; $("#play").textContent = "■ Stop";
+      playing = setInterval(() => { const v = +$("#mix").value + 2; if (v > 100) { clearInterval(playing); playing = null; $("#play").textContent = "▶ Play 0 → 100%"; return; } $("#mix").value = v; renderVisual(); }, 120);
     });
-    $("#btnPredict").addEventListener("click", () => S.loadP.file && renderPrediction(S.loadP.file));
-    $("#btnSuggest").addEventListener("click", () => {
-      const f = S.loadP.file; if (!f || !S.models.air) return;
-      const p = S.models.air.predict(f.segs.map((s) => C.FEATS.map((k) => s.f[k])));
-      f.phases = p.slice(); S.loadP.render();
-      $("#predOut").innerHTML = `<div class="notice warn">Phases suggested by the data-vs-air model. It is only slightly better than chance on the current data, so please check them against your lab notes.</div>`;
-    });
-    $("#btnAdd").addEventListener("click", () => {
-      const f = S.loadP.file; if (!f) return;
-      const label = +$("#trainLabel").value;
-      const recs = f.segs.map((s, i) => ({ file: f.name, seg: i + 1, phase: f.phases[i], rosin_pct: label, f: s.f })).filter((r) => r.phase !== "X");
-      if (!recs.some((r) => r.phase === "D")) { alert("Mark at least one recording as data."); return; }
-      if (S.userRecs.some((r) => r.file === f.name) && !confirm(`${f.name} is already in your training data. Replace it?`)) return;
-      S.userRecs = S.userRecs.filter((r) => r.file !== f.name).concat(recs);
-      saveUser(); trainModels(); renderGallery();
-      $("#predOut").insertAdjacentHTML("afterbegin", `<div class="notice">Added ${recs.length} recordings from <b>${esc(f.name)}</b> as ${cfgName(label)}. Model retrained.</div>`);
-    });
-    $("#useBuiltin").addEventListener("change", trainModels);
-    $("#btnRetrain").addEventListener("click", () => { trainModels(); evaluate(); });
-    $("#btnExport").addEventListener("click", () => {
-      const blob = new Blob([JSON.stringify({ version: 1, features: C.FEATS, recs: S.userRecs.concat(S.repoRecs) }, null, 1)], { type: "application/json" });
-      const a = el("a", { href: URL.createObjectURL(blob), download: "extra_training.json" }); document.body.appendChild(a); a.click(); a.remove();
-    });
-    $("#importFile").addEventListener("change", (e) => {
-      const file = e.target.files[0]; if (!file) return;
-      file.text().then((t) => {
-        try {
-          const recs = JSON.parse(t).recs || [];
-          const files = new Set(recs.map((r) => r.file));
-          S.userRecs = S.userRecs.filter((r) => !files.has(r.file)).concat(recs.filter((r) => r.f && r.phase && r.rosin_pct != null));
-          saveUser(); trainModels(); renderGallery(); alert(`Imported ${recs.length} recordings.`);
-        } catch (err) { alert("Not a valid training-set file."); }
-      });
-      e.target.value = "";
-    });
-    $("#btnReset").addEventListener("click", () => {
-      if (!S.userRecs.length) return;
-      if (!confirm(`Remove ${S.userRecs.length} recordings added in this browser?`)) return;
-      S.userRecs = []; saveUser(); trainModels(); renderGallery();
-    });
-
-    trainModels();
-    evaluate();
-    renderTrust();
-    renderCompare();
-    renderResults();
-    renderGallery();
     $("#boot").remove();
   }
   boot().catch((e) => { $("#boot").className = "notice warn"; $("#boot").textContent = "Failed to start: " + e.message; console.error(e); });

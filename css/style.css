@@ -101,3 +101,27 @@ footer { padding-bottom: 24px; }
 .trust ul, .status ul { margin: 6px 0 0; padding-left: 20px; }
 .trust li, .status li { margin: 3px 0; }
 #plotRatio { min-height: 360px; }
+
+/* ---- simplified app ---- */
+.drop { padding: 28px 14px; font-size: 15px; }
+.fname { font-weight: 400; color: var(--muted); font-size: 15px; word-break: break-all; }
+.bestbox { background: var(--chip); border-radius: 10px; padding: 14px 16px; }
+.toplist { list-style: none; margin: 0; padding: 0; }
+.toplist li { display: grid; grid-template-columns: 26px minmax(150px, 1fr) 2fr 48px; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.toplist li:first-child .tname { font-weight: 700; }
+.toplist .rank { width: 24px; height: 24px; border-radius: 50%; background: var(--chip); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; }
+.toplist li:first-child .rank { background: var(--accent); color: var(--accent-ink); }
+.toplist .bar { height: 10px; background: var(--chip); border-radius: 99px; overflow: hidden; }
+.toplist .bar span { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.toplist .tval { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+@media (max-width: 560px) { .toplist li { grid-template-columns: 26px 1fr 48px; } .toplist .bar { grid-column: 2 / 4; } }
+.steps { list-style: none; padding: 0; margin: 0 0 10px; font-size: 14px; }
+.steps li { padding: 3px 0; }
+details summary { cursor: pointer; font-weight: 600; margin: 8px 0; }
+.slider-row { display: flex; align-items: center; gap: 12px; margin: 8px 0 4px; }
+.slider-row input[type=range] { flex: 1; accent-color: var(--accent); height: 28px; min-width: 0; }
+.slider-row .end { font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.mixlabel { text-align: center; font-size: 18px; margin-bottom: 6px; }
+.plot.sm { min-height: 300px; }
+label, select { max-width: 100%; }
+.row > label { min-width: 0; }

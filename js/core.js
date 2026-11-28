@@ -23,21 +23,33 @@
 
   const mean = (a, s = 0, e = a.length) => { let t = 0; for (let i = s; i < e; i++) t += a[i]; return t / (e - s); };
 
+  /** Read a raw CSV: header names are matched without case/space sensitivity, rows with missing or
+   *  non-numeric values in the needed columns are dropped (counted in .dropped). */
   function parseCSV(text) {
-    const lines = text.replace(/\r/g, "").split("\n").filter((l) => l.trim().length);
-    const header = lines[0].split(",").map((h) => h.trim());
+    const lines = text.replace(/^\uFEFF/, "").replace(/\r/g, "").split("\n").filter((l) => l.trim().length);
+    if (lines.length < 2) throw new Error("The file is empty.");
+    const key = (h) => h.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    const need = SENSORS.concat(["Temperature", "Humidity", "Hour", "Minute", "second"]);
+    const alias = { temp: "Temperature", temperature: "Temperature", humidity: "Humidity", hum: "Humidity", rh: "Humidity",
+      hour: "Hour", hr: "Hour", minute: "Minute", min: "Minute", second: "second", sec: "second",
+      sensor1: "Sensor1", sensor2: "Sensor2", sensor3: "Sensor3", sensor4: "Sensor4", day: "day", month: "month", year: "year" };
+    const header = lines[0].split(",").map((h) => alias[key(h)] || h.trim());
+    const miss = need.filter((h) => !header.includes(h));
+    if (miss.length) throw new Error("Missing columns: " + miss.join(", ") + ". Expected: Sensor1–4, Temperature, Humidity, Hour, Minute, second.");
     const cols = {};
     header.forEach((h) => (cols[h] = []));
+    const idx = need.map((h) => header.indexOf(h));
+    let dropped = 0;
     for (let i = 1; i < lines.length; i++) {
       const p = lines[i].split(",");
-      if (p.length < header.length) continue;
-      header.forEach((h, j) => cols[h].push(parseFloat(p[j])));
+      const v = p.map((x) => parseFloat(x));
+      if (p.length < header.length || idx.some((j) => !Number.isFinite(v[j]))) { dropped++; continue; }
+      header.forEach((h, j) => cols[h].push(v[j]));
     }
-    const need = SENSORS.concat(["Temperature", "Humidity", "Hour", "Minute", "second"]);
-    const miss = need.filter((h) => !(h in cols));
-    if (miss.length) throw new Error("Missing columns: " + miss.join(", "));
+    if (!cols.Hour.length) throw new Error("No readable rows in the file.");
     cols.t = cols.Hour.map((h, i) => h * 3600 + cols.Minute[i] * 60 + cols.second[i]);
     cols.n = cols.t.length;
+    cols.dropped = dropped;
     return cols;
   }
 
