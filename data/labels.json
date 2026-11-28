@@ -54,7 +54,7 @@
     "data-rosin-30%-salak-70%-only-data-no air.csv": {
       "rosin_pct": 30,
       "phases": "DDDDD",
-      "notes": "Day 2 (25 Nov). 5 sample recordings, no air recorded."
+      "notes": "Day 2 (25 Nov). 5 sample recordings, no air recorded. File was shortened on 28 Nov: last recording is 419 rows and the cut-off last line is skipped."
     },
     "data-rosin-40%-salak-60%-only-data-no air.csv": {
       "rosin_pct": 40,
@@ -70,6 +70,21 @@
       "rosin_pct": 100,
       "phases": "DDDDD",
       "notes": "Day 2 (25 Nov). 5 sample recordings, no air recorded."
+    },
+    "data-rosin-10%-salak-90%-only-data-no air-2-sample.csv": {
+      "rosin_pct": 10,
+      "phases": "DDDDDDDDDDD",
+      "notes": "Day 3 (26 Nov), second sample of this mixture. 11 sample recordings, no air recorded."
+    },
+    "data-rosin-20%-salak-80%-only-data-no air-2-sample.csv": {
+      "rosin_pct": 20,
+      "phases": "DDDDDDDDDD",
+      "notes": "Day 3 (26 Nov), second sample of this mixture. 10 sample recordings, no air recorded."
+    },
+    "data-rosin-30%-salak-70%-only-data-no air-2-sample.csv": {
+      "rosin_pct": 30,
+      "phases": "DDDDDDDDDD",
+      "notes": "Day 3 (26 Nov), second sample of this mixture. 10 sample recordings, no air recorded."
     }
   }
 }
