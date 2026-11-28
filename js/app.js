@@ -157,16 +157,17 @@
       const change100 = F.b * 100, base = Math.abs(F.a) > 1e-9 ? (change100 / Math.abs(F.a)) * 100 : null;
       lines.push({ sn, F, at, change100, base });
       Plotly.react(`lin${k + 1}`, [
-        { x: xs, y: ys, mode: "markers", marker: { size: 7, color: css("--air"), opacity: 0.55 }, hovertemplate: "rosin %{x}%<br>%{y:.0f}<extra></extra>" },
-        { x: mixes, y: means, mode: "markers", marker: { size: 11, color: css("--ink"), symbol: "diamond" }, hovertemplate: "average at %{x}%: %{y:.0f}<extra></extra>" },
-        { x: [0, 100], y: [F.a, F.a + F.b * 100], mode: "lines", line: { color: css("--accent"), width: 2.5 }, hoverinfo: "skip" },
-        { x: [p], y: [at], mode: "markers", marker: { size: 16, color: css("--accent"), symbol: "x-thin", line: { width: 3, color: css("--accent") } }, hovertemplate: `expected at ${p}%: %{y:.0f}<extra></extra>` },
+        { x: xs, y: ys, mode: "markers", name: "one recording", marker: { size: 7, color: css("--air"), opacity: 0.5 }, hovertemplate: "rosin %{x}%<br>%{y:.0f}<extra></extra>" },
+        { x: mixes, y: means, mode: "lines+markers", name: "average of each mixture", line: { color: css("--ink"), width: 2.5 }, marker: { size: 10, color: css("--ink"), symbol: "diamond" }, hovertemplate: "average at %{x}%: %{y:.0f}<extra></extra>" },
+        { x: [0, 100], y: [F.a, F.a + F.b * 100], mode: "lines", name: "straight-line fit", line: { color: css("--accent"), width: 2, dash: "dash" }, hoverinfo: "skip" },
+        { x: [p], y: [at], mode: "markers", name: "expected at slider", showlegend: false, marker: { size: 16, color: css("--accent"), symbol: "x-thin", line: { width: 3, color: css("--accent") } }, hovertemplate: `expected at ${p}%: %{y:.0f}<extra></extra>` },
       ], layout({
         title: { text: `${sn.replace("Sensor", "Sensor ")} — R² = ${F.r2.toFixed(2)} (${strength(F.r2)})`, font: { size: 13 } },
         xaxis: { title: "rosin %", range: [-5, 105], dtick: 10, gridcolor: css("--line") },
         yaxis: { title: m === "level" ? "average reading" : "change in reading", gridcolor: css("--line") },
         shapes: [{ type: "line", x0: p, x1: p, yref: "paper", y0: 0, y1: 1, line: { color: css("--accent"), width: 1, dash: "dot" } }],
-        margin: { l: 60, r: 10, t: 40, b: 44 },
+        showlegend: true, legend: { orientation: "h", y: -0.28, font: { size: 11 } },
+        margin: { l: 60, r: 10, t: 40, b: 70 },
       }), PCFG);
     });
     const best = lines.slice().sort((a, b) => b.F.r2 - a.F.r2)[0];

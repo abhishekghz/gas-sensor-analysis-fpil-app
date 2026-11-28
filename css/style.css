@@ -122,6 +122,6 @@ details summary { cursor: pointer; font-weight: 600; margin: 8px 0; }
 .slider-row input[type=range] { flex: 1; accent-color: var(--accent); height: 28px; min-width: 0; }
 .slider-row .end { font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
 .mixlabel { text-align: center; font-size: 18px; margin-bottom: 6px; }
-.plot.sm { min-height: 300px; }
+.plot.sm { min-height: 340px; }
 label, select { max-width: 100%; }
 .row > label { min-width: 0; }
