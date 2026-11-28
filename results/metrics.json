@@ -62,20 +62,20 @@
   "repeats": 100,
   "data_vs_air": {
     "task": "data vs air",
-    "n": 111,
+    "n": 141,
     "class_counts": {
       "A": 18,
-      "D": 93
+      "D": 123
     },
-    "majority_baseline": 0.8378378378378378,
+    "majority_baseline": 0.8723404255319149,
     "models": {
       "Random forest": {
-        "holdout_acc": 0.7941176470588235,
-        "holdout_n_test": 34,
-        "repeated_mean": 0.8352941176470589,
-        "repeated_std": 0.04322628957852668,
-        "lofo_acc": 0.8468468468468469,
-        "lofo_n": 111,
+        "holdout_acc": 0.8837209302325582,
+        "holdout_n_test": 43,
+        "repeated_mean": 0.8832558139534883,
+        "repeated_std": 0.037060749975556015,
+        "lofo_acc": 0.8794326241134752,
+        "lofo_n": 141,
         "holdout_confusion": {
           "labels": [
             "A",
@@ -84,11 +84,11 @@
           "matrix": [
             [
               1,
-              5
+              4
             ],
             [
-              2,
-              26
+              1,
+              37
             ]
           ]
         }
@@ -97,25 +97,27 @@
   },
   "mixture_raw": {
     "task": "mixture, raw features",
-    "n": 93,
+    "n": 123,
     "class_counts": {
       "0": 11,
       "10": 16,
       "20": 21,
       "30": 15,
       "40": 5,
-      "50": 9,
+      "50": 19,
+      "60": 10,
+      "70": 10,
       "100": 16
     },
-    "majority_baseline": 0.22580645161290322,
+    "majority_baseline": 0.17073170731707318,
     "models": {
       "Random forest": {
-        "holdout_acc": 0.6785714285714286,
-        "holdout_n_test": 28,
-        "repeated_mean": 0.6307142857142858,
-        "repeated_std": 0.07696739304300709,
+        "holdout_acc": 0.7837837837837838,
+        "holdout_n_test": 37,
+        "repeated_mean": 0.6672972972972974,
+        "repeated_std": 0.06471773854964556,
         "lofo_acc": 0.0,
-        "lofo_n": 88,
+        "lofo_n": 98,
         "holdout_confusion": {
           "labels": [
             "0",
@@ -124,22 +126,28 @@
             "30",
             "40",
             "50",
+            "60",
+            "70",
             "100"
           ],
           "matrix": [
             [
-              1,
+              2,
               0,
               0,
               0,
               0,
               0,
-              2
+              0,
+              0,
+              1
             ],
             [
               0,
-              3,
-              1,
+              4,
+              0,
+              0,
+              0,
               0,
               0,
               0,
@@ -148,15 +156,41 @@
             [
               0,
               2,
-              3,
+              4,
               0,
               0,
-              1,
+              0,
+              0,
+              0,
               0
             ],
             [
               0,
               0,
+              0,
+              4,
+              0,
+              1,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              1,
               0,
               5,
               0,
@@ -168,27 +202,33 @@
               0,
               0,
               0,
+              0,
+              0,
+              3,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
               1,
               0,
+              2,
               0
             ],
             [
               1,
               0,
               0,
-              1,
-              0,
-              1,
-              0
-            ],
-            [
               0,
               0,
               0,
               0,
               0,
-              0,
-              5
+              4
             ]
           ]
         }
@@ -254,34 +294,49 @@
     {
       "train_days": [
         "25/11/2026",
-        "26/11/2026"
+        "26/11/2026",
+        "27/11/2026"
       ],
       "test_day": "23/11/2026",
       "n_test": 26,
-      "acc": 0.11538461538461539,
-      "mean_abs_error_pct": 41.16538461538461,
-      "chance_acc": 0.14285714285714285
+      "acc": 0.15384615384615385,
+      "mean_abs_error_pct": 40.82692307692309,
+      "chance_acc": 0.1111111111111111
     },
     {
       "train_days": [
         "23/11/2026",
-        "26/11/2026"
+        "26/11/2026",
+        "27/11/2026"
       ],
       "test_day": "25/11/2026",
       "n_test": 31,
-      "acc": 0.12903225806451613,
-      "mean_abs_error_pct": 25.967741935483872,
-      "chance_acc": 0.16666666666666666
+      "acc": 0.03225806451612903,
+      "mean_abs_error_pct": 29.558064516129033,
+      "chance_acc": 0.125
     },
     {
       "train_days": [
         "23/11/2026",
-        "25/11/2026"
+        "25/11/2026",
+        "27/11/2026"
       ],
       "test_day": "26/11/2026",
       "n_test": 31,
+      "acc": 0.06451612903225806,
+      "mean_abs_error_pct": 30.500000000000004,
+      "chance_acc": 0.1111111111111111
+    },
+    {
+      "train_days": [
+        "23/11/2026",
+        "25/11/2026",
+        "26/11/2026"
+      ],
+      "test_day": "27/11/2026",
+      "n_test": 10,
       "acc": 0.0,
-      "mean_abs_error_pct": 17.916129032258063,
+      "mean_abs_error_pct": 22.889999999999997,
       "chance_acc": 0.14285714285714285
     }
   ],
@@ -289,56 +344,70 @@
     {
       "rosin_pct": 0,
       "n": 11,
-      "exact_correct": 0.5454545454545454,
-      "mean_estimate": 38.54545454545455,
-      "sd_estimate": 20.081079454703517
+      "exact_correct": 0.6363636363636364,
+      "mean_estimate": 44.027272727272724,
+      "sd_estimate": 19.54040526745873
     },
     {
       "rosin_pct": 10,
       "n": 16,
       "exact_correct": 0.5625,
-      "mean_estimate": 22.175,
-      "sd_estimate": 9.10065244913792
+      "mean_estimate": 24.981250000000003,
+      "sd_estimate": 12.620133653709853
     },
     {
       "rosin_pct": 20,
       "n": 21,
-      "exact_correct": 0.7142857142857143,
-      "mean_estimate": 28.338095238095246,
-      "sd_estimate": 10.163495658036643
+      "exact_correct": 0.6666666666666666,
+      "mean_estimate": 30.738095238095234,
+      "sd_estimate": 11.033562486059834
     },
     {
       "rosin_pct": 30,
       "n": 15,
-      "exact_correct": 0.6,
-      "mean_estimate": 28.95333333333333,
-      "sd_estimate": 4.020093973473203
+      "exact_correct": 0.6666666666666666,
+      "mean_estimate": 32.160000000000004,
+      "sd_estimate": 5.058168311421307
     },
     {
       "rosin_pct": 40,
       "n": 5,
-      "exact_correct": 1.0,
-      "mean_estimate": 32.92,
-      "sd_estimate": 4.371910337598429
+      "exact_correct": 0.4,
+      "mean_estimate": 38.96,
+      "sd_estimate": 3.730201066966767
     },
     {
       "rosin_pct": 50,
-      "n": 9,
-      "exact_correct": 0.6666666666666666,
-      "mean_estimate": 39.733333333333334,
-      "sd_estimate": 6.396874236687791
+      "n": 19,
+      "exact_correct": 0.7368421052631579,
+      "mean_estimate": 42.626315789473686,
+      "sd_estimate": 7.2208646592075665
+    },
+    {
+      "rosin_pct": 60,
+      "n": 10,
+      "exact_correct": 0.9,
+      "mean_estimate": 55.910000000000004,
+      "sd_estimate": 2.1153959440256083
+    },
+    {
+      "rosin_pct": 70,
+      "n": 10,
+      "exact_correct": 0.6,
+      "mean_estimate": 56.010000000000005,
+      "sd_estimate": 6.401007733162019
     },
     {
       "rosin_pct": 100,
       "n": 16,
-      "exact_correct": 0.8125,
-      "mean_estimate": 52.425,
-      "sd_estimate": 15.987319193660957
+      "exact_correct": 0.75,
+      "mean_estimate": 51.462500000000006,
+      "sd_estimate": 10.929482775959713
     }
   ],
-  "cv5_acc": 0.6774193548387096,
-  "cv5_top3_acc": 0.8924731182795699,
-  "cv5_mae_pct": 18.855913978494623,
+  "cv5_acc": 0.6747967479674797,
+  "cv5_top3_acc": 0.8617886178861789,
+  "cv5_mae_pct": 17.448780487804875,
   "days": {
     "23/11/2026": [
       "data-rosin(20%)+salak(80%).csv",
@@ -362,24 +431,29 @@
       "data-rosin-10%-salak-90%-only-data-no air-2-sample.csv",
       "data-rosin-20%-salak-80%-only-data-no air-2-sample.csv",
       "data-rosin-30%-salak-70%-only-data-no air-2-sample.csv"
+    ],
+    "27/11/2026": [
+      "data-50-50-rosin-salak-2-sample.csv",
+      "data-rosin-60%-salak-40%-2sample.csv",
+      "data-rosin-70%-salak-30%-2-sample.csv"
     ]
   },
   "unseen_mixtures_raw_model": {
     "data-rosin(80%)+salak(20%)+1blank-container.csv": {
       "true_rosin_pct": 80,
-      "estimated_rosin_pct_mean": 31.536363636363635,
+      "estimated_rosin_pct_mean": 29.900000000000002,
       "per_recording": [
-        34.7,
-        62.4,
-        37.4,
-        28.7,
-        27.1,
-        23.2,
-        27.4,
-        27.6,
+        30.9,
+        64.1,
+        27.5,
+        22.5,
+        24.1,
+        26.5,
+        21.0,
+        32.4,
         25.5,
-        26.9,
-        26.0
+        25.8,
+        28.6
       ]
     }
   },
@@ -390,9 +464,11 @@
     30,
     40,
     50,
+    60,
+    70,
     100
   ],
-  "n_data_recordings": 93,
+  "n_data_recordings": 123,
   "final_model": {
     "type": "RandomForest",
     "n_trees": 100,
@@ -461,11 +537,14 @@
       30,
       40,
       50,
+      60,
+      70,
       100
     ],
     "trained_on": {
-      "recordings": 93,
+      "recordings": 123,
       "files": [
+        "data-50-50-rosin-salak-2-sample.csv",
         "data-rosin(20%)+salak(80%).csv",
         "data-rosin+salak(50%-50%).csv",
         "data-rosin-10%-salak-90%-only-data-no air-2-sample.csv",
@@ -478,6 +557,8 @@
         "data-rosin-30%-salak-70%-only-data-no air.csv",
         "data-rosin-40%-salak-60%-only-data-no air.csv",
         "data-rosin-50%-salak-50%-only-data-no air.csv",
+        "data-rosin-60%-salak-40%-2sample.csv",
+        "data-rosin-70%-salak-30%-2-sample.csv",
         "data-rosin-air-to3.30-3.45.csv",
         "data-salak-100%-only-data-no air.csv",
         "data-salak-100%-pure.csv",
@@ -489,7 +570,9 @@
         "20": 21,
         "30": 15,
         "40": 5,
-        "50": 9,
+        "50": 19,
+        "60": 10,
+        "70": 10,
         "100": 16
       }
     }
@@ -497,223 +580,223 @@
   "feature_importance": [
     {
       "feature": "ratio_S1_S4",
-      "importance": 0.08405817285682393
+      "importance": 0.07981896026630848
     },
     {
       "feature": "ratio_S2_S4",
-      "importance": 0.060714907190598695
-    },
-    {
-      "feature": "hum_mean",
-      "importance": 0.042838947263788195
-    },
-    {
-      "feature": "Sensor4_level",
-      "importance": 0.041780622374118045
-    },
-    {
-      "feature": "temp_mean",
-      "importance": 0.03503556810855638
-    },
-    {
-      "feature": "Sensor3_r005",
-      "importance": 0.0319154975679797
-    },
-    {
-      "feature": "ratio_S1_S3",
-      "importance": 0.030898282993562412
-    },
-    {
-      "feature": "Sensor2_level",
-      "importance": 0.0280850479660164
-    },
-    {
-      "feature": "Sensor1_r050",
-      "importance": 0.02471893789193563
+      "importance": 0.05751329383801204
     },
     {
       "feature": "ratio_S2_S3",
-      "importance": 0.024007004241982835
+      "importance": 0.04810414202836641
     },
     {
-      "feature": "Sensor2_rmax",
-      "importance": 0.022908164904046756
+      "feature": "Sensor4_level",
+      "importance": 0.03756084788624907
     },
     {
-      "feature": "Sensor3_r010",
-      "importance": 0.0224362197706901
+      "feature": "hum_mean",
+      "importance": 0.036579174407492816
+    },
+    {
+      "feature": "Sensor2_level",
+      "importance": 0.032291499115687364
     },
     {
       "feature": "Sensor1_level",
-      "importance": 0.022109475468190292
+      "importance": 0.030380384044966634
     },
     {
-      "feature": "Sensor2_r005",
-      "importance": 0.021752749962346475
+      "feature": "temp_mean",
+      "importance": 0.028171650686482985
     },
     {
-      "feature": "Sensor4_r010",
-      "importance": 0.021039378182248
-    },
-    {
-      "feature": "Sensor3_rmax",
-      "importance": 0.02080765462147135
-    },
-    {
-      "feature": "Sensor1_rmax",
-      "importance": 0.019284180848189506
+      "feature": "ratio_S1_S3",
+      "importance": 0.02739513295620877
     },
     {
       "feature": "Sensor4_r005",
-      "importance": 0.018798413918314525
-    },
-    {
-      "feature": "Sensor1_r075",
-      "importance": 0.01859118309623432
+      "importance": 0.027251844367262714
     },
     {
       "feature": "Sensor3_level",
-      "importance": 0.017514126309255067
+      "importance": 0.026138652882312104
     },
     {
-      "feature": "Sensor4_r035",
-      "importance": 0.017153942878475707
+      "feature": "Sensor2_r005",
+      "importance": 0.024963038467210805
     },
     {
-      "feature": "Sensor4_tailslope",
-      "importance": 0.016909816038672032
+      "feature": "Sensor3_r005",
+      "importance": 0.02355287591722399
     },
     {
-      "feature": "Sensor1_r035",
-      "importance": 0.016579510516085996
-    },
-    {
-      "feature": "Sensor1_r020",
-      "importance": 0.015713094727749535
-    },
-    {
-      "feature": "Sensor4_r020",
-      "importance": 0.015620804413549665
-    },
-    {
-      "feature": "Sensor3_r020",
-      "importance": 0.015288653169374838
-    },
-    {
-      "feature": "Sensor1_rmin",
-      "importance": 0.015274827798852652
+      "feature": "Sensor3_rmax",
+      "importance": 0.022709636691470757
     },
     {
       "feature": "Sensor4_r050",
-      "importance": 0.015107768709397696
+      "importance": 0.021843937549873897
     },
     {
-      "feature": "Sensor1_r100",
-      "importance": 0.015092774163565031
-    },
-    {
-      "feature": "Sensor4_rmax",
-      "importance": 0.014846474968197423
-    },
-    {
-      "feature": "Sensor4_r075",
-      "importance": 0.01444060316369767
-    },
-    {
-      "feature": "Sensor4_rmin",
-      "importance": 0.014424076505211925
+      "feature": "Sensor4_r010",
+      "importance": 0.02172584962199082
     },
     {
       "feature": "Sensor4_r100",
-      "importance": 0.013495103279246488
+      "importance": 0.019877936519651047
+    },
+    {
+      "feature": "Sensor1_rmin",
+      "importance": 0.018884899878199017
+    },
+    {
+      "feature": "Sensor4_r035",
+      "importance": 0.018840070881307736
+    },
+    {
+      "feature": "Sensor3_r010",
+      "importance": 0.018285298791063057
+    },
+    {
+      "feature": "Sensor4_rmax",
+      "importance": 0.01796013957823433
+    },
+    {
+      "feature": "Sensor4_r020",
+      "importance": 0.01694612371010947
+    },
+    {
+      "feature": "Sensor1_r050",
+      "importance": 0.016844264748421923
+    },
+    {
+      "feature": "Sensor2_rmax",
+      "importance": 0.016039995156513175
+    },
+    {
+      "feature": "Sensor4_tailslope",
+      "importance": 0.01529654871803074
     },
     {
       "feature": "Sensor1_r005",
-      "importance": 0.012936624755681032
+      "importance": 0.015238299195191277
     },
     {
-      "feature": "Sensor3_rmin",
-      "importance": 0.012858503722968007
+      "feature": "Sensor1_r075",
+      "importance": 0.015118984412877092
     },
     {
-      "feature": "Sensor2_r100",
-      "importance": 0.012629228505161594
+      "feature": "Sensor1_rmax",
+      "importance": 0.01487141245104428
     },
     {
-      "feature": "temp_delta",
-      "importance": 0.01258600144179817
+      "feature": "Sensor1_r020",
+      "importance": 0.01485141354333273
     },
     {
-      "feature": "Sensor2_r010",
-      "importance": 0.012062074898463337
+      "feature": "Sensor1_r100",
+      "importance": 0.014447512865215298
     },
     {
-      "feature": "Sensor3_r035",
-      "importance": 0.011794235073122479
+      "feature": "Sensor4_r075",
+      "importance": 0.013480752038487304
     },
     {
-      "feature": "Sensor3_r050",
-      "importance": 0.011714708529454863
-    },
-    {
-      "feature": "Sensor2_r020",
-      "importance": 0.010515904731921998
-    },
-    {
-      "feature": "Sensor1_r010",
-      "importance": 0.009837953574853942
-    },
-    {
-      "feature": "Sensor3_r075",
-      "importance": 0.00925240487292172
-    },
-    {
-      "feature": "Sensor1_tailslope",
-      "importance": 0.00843260109083408
+      "feature": "Sensor4_rmin",
+      "importance": 0.013062482707633275
     },
     {
       "feature": "hum_delta",
-      "importance": 0.008372088437119294
+      "importance": 0.01242049052845275
     },
     {
-      "feature": "Sensor2_tailslope",
-      "importance": 0.007993297368205901
+      "feature": "Sensor2_r010",
+      "importance": 0.01227329547087082
     },
     {
-      "feature": "Sensor2_rmin",
-      "importance": 0.007733532129299042
+      "feature": "Sensor1_r035",
+      "importance": 0.012273120468813858
     },
     {
-      "feature": "Sensor3_r100",
-      "importance": 0.00710719952096234
+      "feature": "temp_delta",
+      "importance": 0.012180255554783534
+    },
+    {
+      "feature": "Sensor1_r010",
+      "importance": 0.01138571262051554
+    },
+    {
+      "feature": "Sensor3_rmin",
+      "importance": 0.011082212593865355
     },
     {
       "feature": "Sensor2_r075",
-      "importance": 0.006852900705336163
+      "importance": 0.009716529456718774
     },
     {
       "feature": "Sensor2_r050",
-      "importance": 0.006614208069014507
+      "importance": 0.009501035907605076
     },
     {
-      "feature": "Sensor2_r035",
-      "importance": 0.005643544626666403
+      "feature": "Sensor2_r020",
+      "importance": 0.00905381829549902
     },
     {
       "feature": "Sensor3_tailslope",
-      "importance": 0.0051722701610669546
+      "importance": 0.009038688802361628
+    },
+    {
+      "feature": "Sensor3_r050",
+      "importance": 0.00874312768833646
+    },
+    {
+      "feature": "Sensor3_r035",
+      "importance": 0.008186970600013173
+    },
+    {
+      "feature": "Sensor2_tailslope",
+      "importance": 0.00803509794274407
+    },
+    {
+      "feature": "Sensor1_tailslope",
+      "importance": 0.007996604272366231
+    },
+    {
+      "feature": "Sensor3_r020",
+      "importance": 0.007549654377187493
+    },
+    {
+      "feature": "Sensor2_rmin",
+      "importance": 0.0070562263014322685
+    },
+    {
+      "feature": "Sensor3_r100",
+      "importance": 0.007012873178426725
+    },
+    {
+      "feature": "Sensor2_r035",
+      "importance": 0.007005998681759609
+    },
+    {
+      "feature": "Sensor3_r075",
+      "importance": 0.006807098899645733
+    },
+    {
+      "feature": "Sensor2_r100",
+      "importance": 0.006124201063485118
     },
     {
       "feature": "Sensor2_tpeak",
-      "importance": 0.00466074896271802
+      "importance": 0.005050957483552131
     },
     {
       "feature": "Sensor3_tpeak",
-      "importance": 0.004116590876459756
+      "importance": 0.003931704045373918
     },
     {
       "feature": "Sensor1_tpeak",
-      "importance": 0.0018713920775452043
+      "importance": 0.0015272698437593171
     },
     {
       "feature": "Sensor4_tpeak",

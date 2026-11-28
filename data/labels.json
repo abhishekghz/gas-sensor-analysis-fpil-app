@@ -85,6 +85,21 @@
       "rosin_pct": 30,
       "phases": "DDDDDDDDDD",
       "notes": "Day 3 (26 Nov), second sample of this mixture. 10 sample recordings, no air recorded."
+    },
+    "data-50-50-rosin-salak-2-sample.csv": {
+      "rosin_pct": 50,
+      "phases": "DDDDDDDDDD",
+      "notes": "Day 4 (27 Nov), second sample. 10 sample recordings, no air recorded."
+    },
+    "data-rosin-60%-salak-40%-2sample.csv": {
+      "rosin_pct": 60,
+      "phases": "DDDDDDDDDD",
+      "notes": "Day 4 (27 Nov), first recorded 60% data. 10 sample recordings, no air recorded."
+    },
+    "data-rosin-70%-salak-30%-2-sample.csv": {
+      "rosin_pct": 70,
+      "phases": "DDDDDDDDDD",
+      "notes": "Day 4 (27 Nov), first recorded 70% data; recordings 1-2 taken while the device was still warming up (28-33 C). 10 sample recordings, no air recorded."
     }
   }
 }
