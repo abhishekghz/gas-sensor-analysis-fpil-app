@@ -24,9 +24,9 @@
   const dist = (a, b) => Math.sqrt(a.reduce((s, v, j) => s + (v - b[j]) ** 2, 0));
 
   async function loadKnown() {
-    S.labels = (await (await fetch("data/labels.json")).json()).files;
+    S.labels = (await (await fetch("data/labels.json", { cache: "no-cache" })).json()).files;
     await Promise.all(Object.entries(S.labels).map(async ([fn, lab]) => {
-      const d = C.parseCSV(await (await fetch("data/" + encodeURIComponent(fn))).text());
+      const d = C.parseCSV(await (await fetch("data/" + encodeURIComponent(fn), { cache: "no-cache" })).text());
       const segs = C.segment(d);
       segs.forEach((s) => (s.f = C.segmentFeatures(s.data)));
       S.files[fn] = { d, segs, lab, date: dateOf(d, 0) };
@@ -178,6 +178,7 @@
         This is the clearest of the 4 sensors, and its straight line explains <b>${pct(best.F.r2)}</b> of the variation between recordings (${strength(best.F.r2)}).</p>
         <p class="muted small">${R.length} recordings · mixtures ${mixes.map((c) => c + "%").join(", ")}. R² goes from 0 (no straight-line link) to 1 (all dots on the line).</p></div>`;
     renderCurve(p, R, mixes);
+    if (!renderVisual.sliderOnly) renderRelation();
   }
 
   function meanCurve(R, sn, G = 120) {
@@ -200,6 +201,43 @@
       margin: { l: 60, r: 12, t: 40, b: 80 } }), PCFG);
   }
 
+  // ------------------------------------------------------------- sensor-to-sensor relationship
+  const PNAME = { Sensor1: "Sensor 1", Sensor2: "Sensor 2", Sensor3: "Sensor 3", Sensor4: "Sensor 4", Temperature: "Temperature", Humidity: "Humidity" };
+  const PUNIT = { Temperature: " °C", Humidity: " % RH" };
+  const PARAMS6 = ["Sensor1", "Sensor2", "Sensor3", "Sensor4", "Temperature", "Humidity"];
+  const avgOf = (r, p) => C.mean(r.s.data[p]);
+  const num = (v, p) => (p === "Temperature" || p === "Humidity" ? v.toFixed(1) : fmt(v));
+  function corr(a, b) { const F = fit(a, b); return Math.sign(F.b) * Math.sqrt(F.r2); }
+  function renderRelation() {
+    const R = visRecs(), px = $("#rX").value, py = $("#rY").value;
+    const xs = R.map((r) => avgOf(r, px)), ys = R.map((r) => avgOf(r, py));
+    if (px === py) { $("#relSummary").innerHTML = '<div class="notice">Pick two different measurements.</div>'; }
+    else {
+      const F = fit(xs, ys), lo = Math.min(...xs), hi = Math.max(...xs);
+      const step = px === "Temperature" || px === "Humidity" ? 1 : hi - lo > 1000 ? 100 : 10;
+      const dir = F.b >= 0 ? "up" : "down";
+      $("#relSummary").innerHTML = `<div class="headline"><div class="hl">${PNAME[py]} ≈ ${Math.abs(F.b) >= 10 ? fmt(F.b) : F.b.toFixed(2)} × ${PNAME[px]} ${F.a >= 0 ? "+" : "−"} ${num(Math.abs(F.a), py)}</div>
+        <p class="kv">When ${PNAME[px]} goes up by ${step}${PUNIT[px] || ""}, ${PNAME[py]} goes ${dir} by about <b>${num(Math.abs(F.b * step), py)}</b>${PUNIT[py] || ""}.
+        The straight line explains <b>${pct(F.r2)}</b> of the variation (${strength(F.r2).replace(" straight-line", "")}).</p>
+        <p class="muted small">${R.length} recordings. R² from 0 (no straight-line link) to 1 (all dots on the line).</p></div>`;
+      Plotly.react("relScatter", [
+        { x: xs, y: ys, mode: "markers", marker: { size: 7, color: css("--air"), opacity: 0.6 }, text: R.map((r) => `rosin ${r.rosin}% · ${r.date}`), hovertemplate: `%{text}<br>${PNAME[px]} %{x:.1f}<br>${PNAME[py]} %{y:.1f}<extra></extra>` },
+        { x: [lo, hi], y: [F.a + F.b * lo, F.a + F.b * hi], mode: "lines", line: { color: css("--accent"), width: 3 }, hoverinfo: "skip" },
+      ], layout({ title: { text: `${PNAME[py]} vs ${PNAME[px]} — R² = ${F.r2.toFixed(2)}`, font: { size: 13 } },
+        xaxis: { title: PNAME[px] + (PUNIT[px] || ""), gridcolor: css("--line") }, yaxis: { title: PNAME[py] + (PUNIT[py] || ""), gridcolor: css("--line") } }), PCFG);
+    }
+    const vals = PARAMS6.map((p) => R.map((r) => avgOf(r, p)));
+    const Z = PARAMS6.map((_, i) => PARAMS6.map((__, j) => (i === j ? 1 : corr(vals[j], vals[i]))));
+    const lab = ["S1", "S2", "S3", "S4", "Temp", "RH"];
+    Plotly.react("relHeat", [{ type: "heatmap", z: Z, x: lab, y: lab, zmin: -1, zmax: 1,
+      colorscale: [[0, "#2E86AB"], [0.5, "#F4F5F7"], [1, "#C8641E"]], showscale: false, hovertemplate: "%{y} vs %{x}: %{z:.2f}<extra></extra>" }],
+    layout({ title: { text: "How strongly each pair moves together (−1 to 1)", font: { size: 13 } }, yaxis: { autorange: "reversed" },
+      annotations: Z.flatMap((row, i) => row.map((v, j) => ({ x: lab[j], y: lab[i], text: v.toFixed(2), showarrow: false, font: { size: 11, color: Math.abs(v) > 0.65 ? "#fff" : css("--ink") } }))),
+      margin: { l: 50, r: 10, t: 40, b: 40 } }), PCFG);
+    const el = $("#relHeat");
+    if (!el.dataset.bound) { el.dataset.bound = "1"; el.on("plotly_click", (e) => { const pt = e.points[0]; $("#rX").value = PARAMS6[lab.indexOf(pt.x)]; $("#rY").value = PARAMS6[lab.indexOf(pt.y)]; renderRelation(); }); }
+  }
+
   let raf = 0, playing = null;
   const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(renderVisual); };
 
@@ -208,7 +246,7 @@
     document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
       document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === b));
       document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + b.dataset.tab));
-      if (b.dataset.tab === "visual") renderVisual();
+      if (b.dataset.tab === "visual") { renderVisual.sliderOnly = false; renderVisual(); }
       window.dispatchEvent(new Event("resize"));
     }));
     await loadKnown();
@@ -220,7 +258,7 @@
     drop.addEventListener("dragleave", () => drop.classList.remove("over"));
     drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) read(e.dataTransfer.files[0]); });
     Object.keys(S.files).sort().forEach((fn) => $("#demo").insertAdjacentHTML("beforeend", `<option value="${esc(fn)}">${esc(fn)}</option>`));
-    const rawText = async (fn) => (await fetch("data/" + encodeURIComponent(fn))).text();
+    const rawText = async (fn) => (await fetch("data/" + encodeURIComponent(fn), { cache: "no-cache" })).text();
     $("#demo").addEventListener("change", async () => { const fn = $("#demo").value; if (fn) runPredict(fn, await rawText(fn)); });
     $("#topN").addEventListener("change", () => last && renderPrediction(last));
     $("#airMode").addEventListener("change", async () => { const fn = $("#demo").value; if (fn) runPredict(fn, await rawText(fn)); else if (last) $("#predOut").insertAdjacentHTML("afterbegin", '<div class="notice warn">Air setting changed: upload the file again to apply it.</div>'); });
@@ -228,9 +266,10 @@
     const days = Array.from(new Set(S.recs.map((r) => r.date))).sort();
     const nMix = (d) => new Set(S.recs.filter((r) => r.date === d).map((r) => r.rosin)).size;
     const full = days.slice().sort((a, b) => nMix(b) - nMix(a))[0];
-    $("#vDay").innerHTML = days.map((d) => `<option value="${d}"${d === full ? " selected" : ""}>${d} only (${nMix(d)} mixtures, same session)</option>`).join("") + `<option value="all">Both days together</option>`;
-    $("#mix").addEventListener("input", schedule);
-    ["#vDay", "#vMeasure", "#vSensor"].forEach((id) => $(id).addEventListener("change", renderVisual));
+    $("#vDay").innerHTML = days.map((d) => `<option value="${d}"${d === full ? " selected" : ""}>${d} only (${nMix(d)} mixtures, same session)</option>`).join("") + `<option value="all">All days together</option>`;
+    $("#mix").addEventListener("input", () => { renderVisual.sliderOnly = true; schedule(); });
+    ["#vDay", "#vMeasure", "#vSensor"].forEach((id) => $(id).addEventListener("change", () => { renderVisual.sliderOnly = false; renderVisual(); }));
+    ["#rX", "#rY"].forEach((id) => $(id).addEventListener("change", renderRelation));
     $("#play").addEventListener("click", () => {
       if (playing) { clearInterval(playing); playing = null; $("#play").textContent = "▶ Play 0 → 100%"; return; }
       $("#mix").value = 0; $("#play").textContent = "■ Stop";

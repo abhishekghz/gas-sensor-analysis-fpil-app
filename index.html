@@ -83,6 +83,23 @@
       </div>
     </div>
     <div class="card">
+      <h2>How the sensors relate to each other</h2>
+      <p class="muted small">Each dot is one 1-minute recording (its average reading). Pick any two measurements, or click a square in the table below.</p>
+      <div class="row wrapgap">
+        <label>Across (x)
+          <select id="rX"><option>Sensor1</option><option selected>Sensor2</option><option>Sensor3</option><option>Sensor4</option><option>Temperature</option><option>Humidity</option></select>
+        </label>
+        <label>Up (y)
+          <select id="rY"><option>Sensor1</option><option>Sensor2</option><option selected>Sensor3</option><option>Sensor4</option><option>Temperature</option><option>Humidity</option></select>
+        </label>
+      </div>
+      <div id="relSummary"></div>
+      <div class="grid2">
+        <div id="relScatter" class="plot"></div>
+        <div id="relHeat" class="plot"></div>
+      </div>
+    </div>
+    <div class="card">
       <h2>Expected 1-minute response at this mixture</h2>
       <p class="muted small">Blended from the two nearest recorded mixtures (thin lines). Each curve shows the change from the start of the recording.</p>
       <div class="row wrapgap">
